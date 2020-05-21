@@ -39,6 +39,17 @@ void AuctionHouseVendorBotMgr::load() {
 
     if (!m_config->enabled) { return; }
 
+    /* create table */
+    WorldDatabase.Query(R"(CREATE TABLE IF NOT EXISTS `mangos`.`auctionhousevendorbot` (
+        `itemGuid` INT(11) UNSIGNED NOT NULL,
+        `factionTemplateId` TINYINT(3) UNSIGNED NULL,
+        `infoTimestamp` BIGINT(40) UNSIGNED NOT NULL,
+        `state` TINYINT(3) UNSIGNED NOT NULL DEFAULT 1)
+        ENGINE = MyISAM
+        DEFAULT CHARACTER SET = latin1
+        COLLATE = latin1_bin;)");
+    
+
     /*2 - LOAD */
     auto result = WorldDatabase.Query("SELECT `itemGuid`, `factionTemplateId`, `infoTimestamp`, `state` FROM `auctionhousevendorbot`");
     if (!result) {
