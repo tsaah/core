@@ -67,6 +67,8 @@
 #include "MasterPlayer.h"
 #include "MovementPacketSender.h"
 
+#include "AuctionHouseVendorBotMgr.h"
+
 /* Nostalrius */
 #include "Config/Config.h"
 #include <cmath>
@@ -11536,6 +11538,16 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money, ObjectGuid vendorGu
 {
     MANGOS_ASSERT(!!pItem);
 
+    if (sAuctionHouseVendorBotMgr.isEnabled()) {
+        Creature* vendor = nullptr;
+        auto* vendorUnit = ObjectAccessor::GetUnit(*this, ObjectGuid(vendorGuid));
+        if (vendorUnit && vendorUnit->IsCreature()) {
+            vendor = vendorUnit->ToCreature();
+        }
+        sAuctionHouseVendorBotMgr.addPendingItemInfo(vendor, pItem);
+    }
+    
+
     uint32 slot = m_currentBuybackSlot;
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_7_1
     // if current back slot non-empty search oldest or free
@@ -11613,6 +11625,11 @@ void Player::RemoveItemFromBuyBackSlot(uint32 slot, bool del)
         Item* pItem = m_items[slot];
         if (pItem)
         {
+	            if (del) {
+                    sAuctionHouseVendorBotMgr.createAuction(pItem);
+	            } else {
+                    sAuctionHouseVendorBotMgr.removeItemInfo(pItem);
+	            }
             pItem->RemoveFromWorld();
             if (del) pItem->SetState(ITEM_REMOVED, this);
         }
@@ -16436,6 +16453,8 @@ void Player::_SaveInventory()
     {
         Item* item = m_items[i];
         if (!item || item->GetState() == ITEM_NEW) continue;
+
+            sAuctionHouseVendorBotMgr.createAuction(item);
 
         static SqlStatementID delInv ;
         static SqlStatementID delItemInst ;
