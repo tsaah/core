@@ -38,6 +38,7 @@
 #include "Mail.h"
 
 #include "Policies/SingletonImp.h"
+#include "AuctionHouseVendorBotMgr.h"
 
 INSTANTIATE_SINGLETON_1(AuctionHouseMgr);
 
@@ -117,6 +118,8 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
     Item *pItem = GetAItem(auction->itemGuidLow);
     if (!pItem)
         return;
+
+    sAuctionHouseVendorBotMgr.removeItemInfo(pItem);
 
     ObjectGuid bidder_guid = ObjectGuid(HIGHGUID_PLAYER, auction->bidder);
     Player* bidder = sObjectMgr.GetPlayer(bidder_guid);
@@ -248,6 +251,8 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
         sLog.outError("Auction item (GUID: %u) not found, and lost.", auction->itemGuidLow);
         return;
     }
+
+    sAuctionHouseVendorBotMgr.recreateExpiredAuction(pItem);
 
     ObjectGuid owner_guid = ObjectGuid(HIGHGUID_PLAYER, auction->owner);
     Player* owner = sObjectMgr.GetPlayer(owner_guid);

@@ -65,6 +65,7 @@
 #include "LFGMgr.h"
 #include "AutoBroadCastMgr.h"
 #include "AuctionHouseBotMgr.h"
+#include "AuctionHouseVendorBotMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
 #include "ProgressBar.h"
@@ -1720,6 +1721,9 @@ void World::SetInitialWorldSettings()
 
     sLog.outString("Loading AH bot");
     sAuctionHouseBotMgr.Load();
+
+    sLog.outString("Loading AH vendor bot");
+    sAuctionHouseVendorBotMgr.load();
 
     sLog.outString("Caching player phases (obsolete)");
     sObjectMgr.LoadPlayerPhaseFromDb();
