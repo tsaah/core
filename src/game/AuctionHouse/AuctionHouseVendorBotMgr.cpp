@@ -86,10 +86,13 @@ void AuctionHouseVendorBotMgr::load() {
 
 void AuctionHouseVendorBotMgr::createAuction(Item* item) {
 	if (!isEnabled() || !item || !haveInfo(item)) { return; }
+    
+	auto* auctionItem = sAuctionMgr.GetAItem(item->GetGUIDLow());
+    if (auctionItem) { return; }
 
-    auto& entry = m_infos.at(item->GetGUIDLow());
+    auto entry = m_infos.at(item->GetGUIDLow());
+
     auto* auctionHouseEntry = sAuctionHouseStore.LookupEntry(entry.auctionHouseId);
-    //auto* auctionHouseEntry = AuctionHouseMgr::GetAuctionHouseEntry(entry.factionTemplateId);
 
     if (auctionHouseEntry == nullptr) {
         sLog.outInfo("AHVendorBot::createAuction(): could not get auctionHouseEntry with auctionHouseId = %u", entry.auctionHouseId);
@@ -160,8 +163,10 @@ void AuctionHouseVendorBotMgr::createAuction(Item* item) {
     auctionEntry->SaveToDB();
 
 
+    m_infos.erase(entry.itemGuid);
     entry.state = 2;
     entry.itemGuid = newItem->GetGUIDLow();
+    m_infos.insert({ entry.itemGuid, entry });
     WorldDatabase.PExecute("UPDATE `auctionhousevendorbot` SET `itemGuid` = '%u', `state` = '%u' WHERE `itemGuid` = '%u'", entry.itemGuid, entry.state, item->GetGUIDLow());
 
     sLog.outInfo("AHVendorBot::createAuction(): Created auction for item %u '%s' x%u for %u price.", newItem->GetGUIDLow(), newItem->GetProto()->Name1, newItem->GetCount(), price);
