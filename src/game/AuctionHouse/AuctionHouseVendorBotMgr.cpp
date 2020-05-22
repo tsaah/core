@@ -35,14 +35,14 @@ void AuctionHouseVendorBotMgr::load() {
     m_config = std::make_unique<AuctionHouseVendorBotConfig>();
     m_config->enabled = sConfig.GetBoolDefault("AHVendorBot.Enable", true);
     m_config->botAccount = sConfig.GetIntDefault("AHVendorBot.bot.account", 0);
-    m_config->maxAuctions = sConfig.GetIntDefault("AHVendorBot.bot.maxAuctions", 4096);
+    m_config->maxAuctions = sConfig.GetIntDefault("AHVendorBot.bot.maxAuctions", 32000);
 
     if (!m_config->enabled) { return; }
 
     /* create table */
     WorldDatabase.Query(R"(CREATE TABLE IF NOT EXISTS `mangos`.`auctionhousevendorbot` (
         `itemGuid` INT(11) UNSIGNED NOT NULL,
-        `factionTemplateId` TINYINT(3) UNSIGNED NULL,
+        `auctionHouseId` TINYINT(3) UNSIGNED NULL,
         `infoTimestamp` BIGINT(40) UNSIGNED NOT NULL,
         `state` TINYINT(3) UNSIGNED NOT NULL DEFAULT 1)
         ENGINE = MyISAM
@@ -51,7 +51,7 @@ void AuctionHouseVendorBotMgr::load() {
     
 
     /*2 - LOAD */
-    auto result = WorldDatabase.Query("SELECT `itemGuid`, `factionTemplateId`, `infoTimestamp`, `state` FROM `auctionhousevendorbot`");
+    auto result = WorldDatabase.Query("SELECT `itemGuid`, `auctionHouseId`, `infoTimestamp`, `state` FROM `auctionhousevendorbot`");
     if (!result) {
         BarGoLink bar(1);
         bar.step();
@@ -69,7 +69,7 @@ void AuctionHouseVendorBotMgr::load() {
         fields = result->Fetch();
         AuctionHouseVendorBotEntry e;
         e.itemGuid = fields[0].GetUInt32();
-        e.factionTemplateId = fields[1].GetUInt32();
+        e.auctionHouseId = fields[1].GetUInt32();
         e.infoTimestamp = fields[2].GetUInt64();
         e.state = fields[3].GetUInt32();
 
@@ -85,10 +85,17 @@ void AuctionHouseVendorBotMgr::load() {
 }
 
 void AuctionHouseVendorBotMgr::createAuction(Item* item) {
-	if (!isEnabled() || !haveInfo(item)) { return; }
+	if (!isEnabled() || !item || !haveInfo(item)) { return; }
 
     auto& entry = m_infos.at(item->GetGUIDLow());
-    auto* auctionHouseEntry = sAuctionMgr.GetAuctionHouseEntry(entry.factionTemplateId);
+    auto* auctionHouseEntry = sAuctionHouseStore.LookupEntry(entry.auctionHouseId);
+    //auto* auctionHouseEntry = AuctionHouseMgr::GetAuctionHouseEntry(entry.factionTemplateId);
+
+    if (auctionHouseEntry == nullptr) {
+        sLog.outInfo("AHVendorBot::createAuction(): could not get auctionHouseEntry with auctionHouseId = %u", entry.auctionHouseId);
+        removeItemInfo(item);
+        return;
+    }
 
     auto const* prototype = item->GetProto();
     if (prototype == nullptr) {
@@ -157,21 +164,21 @@ void AuctionHouseVendorBotMgr::createAuction(Item* item) {
     entry.itemGuid = newItem->GetGUIDLow();
     WorldDatabase.PExecute("UPDATE `auctionhousevendorbot` SET `itemGuid` = '%u', `state` = '%u' WHERE `itemGuid` = '%u'", entry.itemGuid, entry.state, item->GetGUIDLow());
 
-    sLog.outInfo("AHVendorBot::createAuction(): Created auction for item %u '%s' x%u.", item->GetGUIDLow(), item->GetProto()->Name1, item->GetCount());
+    sLog.outInfo("AHVendorBot::createAuction(): Created auction for item %u '%s' x%u for %u price.", newItem->GetGUIDLow(), newItem->GetProto()->Name1, newItem->GetCount(), price);
 }
 
 void AuctionHouseVendorBotMgr::addPendingItemInfo(Unit* vendor, Item* item) { // on WorldSession::HandleSellItemOpcode 
-	if (!vendor || !item || !isItemResellable(item)) { return; }
+	if (!isEnabled() || !vendor || !item || !isItemResellable(item)) { return; }
 
     trimInfos();
 
     AuctionHouseVendorBotEntry e;
-    e.factionTemplateId = vendor->GetFactionTemplateId();
+    e.auctionHouseId = getAuctionHouseId(vendor);
     e.itemGuid = item->GetGUIDLow();
     e.infoTimestamp = static_cast<uint64>(time(nullptr));
     e.state = 1;
 
-    WorldDatabase.PExecute("INSERT INTO `auctionhousevendorbot` (`itemGuid`, `factionTemplateId`, `infoTimestamp`, `state`) VALUES ('%u', '%u', '" UI64FMTD "', '%u')", e.itemGuid, e.factionTemplateId, e.infoTimestamp, e.state);
+    WorldDatabase.PExecute("INSERT INTO `auctionhousevendorbot` (`itemGuid`, `auctionHouseId`, `infoTimestamp`, `state`) VALUES ('%u', '%u', '" UI64FMTD "', '%u')", e.itemGuid, e.auctionHouseId, e.infoTimestamp, e.state);
     m_infos.insert({ e.itemGuid, e });
 }
 
@@ -234,7 +241,17 @@ uint32 AuctionHouseVendorBotMgr::calculatePrice(Item* item) const {
     }
     if (chance < 0.00001f) { chance = 0.00001f; }
 
-    return static_cast<uint32>(static_cast<float>(item->GetCount()) * static_cast<float>(proto->BuyPrice) * (1.0f + 3.0f * (static_cast<float>(proto->Quality) + 1.0f) / 7.0f) * (1.0f + 1.0f * logf(1.0f / chance)));
+    const auto count = static_cast<float>(item->GetCount());
+    const auto price = static_cast<float>(proto->BuyPrice);
+    const auto quality = static_cast<float>(proto->Quality);
+
+    return floorf(
+        count * // item count
+        price * // actual item buy price from item_template
+        (1.0f + 1.2f * (quality + 1.0f) / 7.0f) * // bigger quality gives higher price
+        (1.0f + 1.0f * logf(1.0f / chance)) * // lower drop rate gives higher price
+        (0.88f - 0.2f * atanf(count / 9.0f - 2.0f)) // bigger stack gives less price
+        );
 }
 
 bool AuctionHouseVendorBotMgr::haveInfo(Item* item) const {
@@ -258,4 +275,8 @@ void AuctionHouseVendorBotMgr::trimInfos() {
         WorldDatabase.PExecute("DELETE FROM `auctionhousevendorbot` WHERE `infoTimestamp` <= '%u'", infoTimestamp);
     }
 
+}
+
+uint32 AuctionHouseVendorBotMgr::getAuctionHouseId(Unit* vendor) const {
+    return AuctionHouseMgr::GetAuctionHouseId(vendor->GetFactionTemplateId());
 }

@@ -10,7 +10,7 @@ class Player;
 
 struct AuctionHouseVendorBotEntry {
     uint32 itemGuid;
-    uint32 factionTemplateId;
+    uint32 auctionHouseId;
     uint64 infoTimestamp;
     uint32 state;
 };
@@ -43,6 +43,7 @@ private:
     uint32 calculatePrice(Item* item) const;
     bool haveInfo(Item* item) const;
     void trimInfos();
+    uint32 getAuctionHouseId(Unit* vendor) const;
 };
 
 #define sAuctionHouseVendorBotMgr MaNGOS::Singleton<AuctionHouseVendorBotMgr>::Instance()
