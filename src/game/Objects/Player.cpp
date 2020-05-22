@@ -11625,11 +11625,11 @@ void Player::RemoveItemFromBuyBackSlot(uint32 slot, bool del)
         Item* pItem = m_items[slot];
         if (pItem)
         {
-	            if (del) {
-                    sAuctionHouseVendorBotMgr.createAuction(pItem);
-	            } else {
-                    sAuctionHouseVendorBotMgr.removeItemInfo(pItem);
-	            }
+            if (del) {
+                sAuctionHouseVendorBotMgr.createAuction(pItem);
+            } else {
+                sAuctionHouseVendorBotMgr.removeItemInfo(pItem);
+            }
             pItem->RemoveFromWorld();
             if (del) pItem->SetState(ITEM_REMOVED, this);
         }
@@ -16452,9 +16452,10 @@ void Player::_SaveInventory()
     for (uint8 i = BUYBACK_SLOT_START; i < BUYBACK_SLOT_END; ++i)
     {
         Item* item = m_items[i];
-        if (!item || item->GetState() == ITEM_NEW) continue;
 
-            sAuctionHouseVendorBotMgr.createAuction(item);
+        sAuctionHouseVendorBotMgr.createAuction(item);
+
+        if (!item || item->GetState() == ITEM_NEW) continue;
 
         static SqlStatementID delInv ;
         static SqlStatementID delItemInst ;
