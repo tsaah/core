@@ -252,8 +252,6 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
         return;
     }
 
-    sAuctionHouseVendorBotMgr.recreateExpiredAuction(pItem);
-
     ObjectGuid owner_guid = ObjectGuid(HIGHGUID_PLAYER, auction->owner);
     Player* owner = sObjectMgr.GetPlayer(owner_guid);
 
@@ -284,6 +282,8 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
         RemoveAItem(pItem->GetGUIDLow());                   // we have to remove the item, before we delete it !!
         delete pItem;
     }
+
+    sAuctionHouseVendorBotMgr.recreateExpiredAuction(pItem);
 }
 
 AuctionHouseObject* AuctionHouseMgr::MakeNewAuctionHouseObject()
