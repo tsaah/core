@@ -62,14 +62,12 @@ set (SCRIPTS_SRCS
     eastern_kingdoms/burning_steppes/blackrock_depths/boss_tomb_of_seven.cpp
     eastern_kingdoms/burning_steppes/blackrock_depths/instance_blackrock_depths.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_drakkisath.cpp
-    eastern_kingdoms/burning_steppes/blackrock_spire/boss_gyth.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_halycon.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_highlord_omokk.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_mother_smolderweb.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_overlord_wyrmthalak.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_pyroguard_emberseer.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_quartermaster_zigris.cpp
-    eastern_kingdoms/burning_steppes/blackrock_spire/boss_rend_blackhand.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_shadow_hunter_voshgajin.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_the_beast.cpp
     eastern_kingdoms/burning_steppes/blackrock_spire/boss_urok.cpp
@@ -222,7 +220,6 @@ set (SCRIPTS_SRCS
     kalimdor/feralas/dire_maul/boss_zevrim.cpp
     kalimdor/feralas/dire_maul/dreadsteed_ritual.cpp
     kalimdor/feralas/dire_maul/instance_dire_maul.cpp
-    kalimdor/feralas/dire_maul/npc_ecorcefer.cpp
     kalimdor/feralas/dire_maul/npc_pusillin.cpp
     kalimdor/moonglade/boss_omen.cpp
     kalimdor/moonglade/moonglade.cpp
@@ -262,7 +259,6 @@ set (SCRIPTS_SRCS
     kalimdor/the_barrens/wailing_caverns/instance_wailing_caverns.cpp
     kalimdor/the_barrens/wailing_caverns/wailing_caverns.cpp
     kalimdor/thousand_needles/thousand_needles.cpp
-    kalimdor/thunder_bluff/thunder_bluff.cpp
     kalimdor/ungoro_crater/ungoro_crater.cpp
     kalimdor/winterspring/winterspring.cpp
     PrecompiledHeaders/scriptPCH.cpp

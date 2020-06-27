@@ -28,7 +28,6 @@ void AddSC_boss_immol_thar();
 void AddSC_boss_tendris_warpwood();
 void AddSC_npc_pusillin();
 void AddSC_boss_zevrim();
-void AddSC_npc_ecorcefer();
 void AddSC_dreadsteed_ritual();
 void AddSC_npc_king_gordok();
 
@@ -68,8 +67,6 @@ void AddSC_boss_thebeast();
 void AddSC_boss_warmastervoone();
 void AddSC_boss_quatermasterzigris();
 void AddSC_boss_pyroguard_emberseer();
-void AddSC_boss_gyth();
-void AddSC_boss_rend_blackhand();
 void AddSC_boss_razorgore();                         //blackwing_lair
 void AddSC_boss_vael();
 void AddSC_boss_broodlord();
@@ -256,7 +253,6 @@ void AddSC_tanaris();
 void AddSC_teldrassil();
 void AddSC_the_barrens();
 void AddSC_thousand_needles();
-void AddSC_thunder_bluff();
 void AddSC_ungoro_crater();
 void AddSC_winterspring();
 void AddSC_war_effort();
@@ -287,7 +283,6 @@ void AddScripts()
     AddSC_boss_immol_thar();
     AddSC_boss_tendris_warpwood();
     AddSC_npc_pusillin();
-    AddSC_npc_ecorcefer();
     AddSC_boss_zevrim();
     AddSC_dreadsteed_ritual();
     AddSC_npc_king_gordok();
@@ -331,8 +326,6 @@ void AddScripts()
 
     AddSC_instance_blackrock_spire();
     AddSC_boss_pyroguard_emberseer();
-    AddSC_boss_gyth();
-    AddSC_boss_rend_blackhand();
     AddSC_boss_razorgore();                                 //blackwing_lair
     AddSC_boss_vael();
     AddSC_boss_broodlord();
@@ -516,7 +509,6 @@ void AddScripts()
     AddSC_teldrassil();
     AddSC_the_barrens();
     AddSC_thousand_needles();
-    AddSC_thunder_bluff();
     AddSC_ungoro_crater();
     AddSC_winterspring();
 
