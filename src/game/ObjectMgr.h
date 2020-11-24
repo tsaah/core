@@ -311,38 +311,39 @@ struct RepSpilloverTemplate
 
 struct PointOfInterest
 {
-    uint32 entry;
-    float x;
-    float y;
-    uint32 icon;
-    uint32 flags;
-    uint32 data;
+    uint32 entry = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    uint32 icon = 0;
+    uint32 flags = 0;
+    uint32 data = 0;
     std::string icon_name;
 };
 
 struct GossipMenuItems
 {
-    uint32          menu_id;
-    uint32          id;
-    uint8           option_icon;
+    uint32          menu_id = 0;
+    uint32          id = 0;
+    uint8           option_icon = 0;
     std::string     option_text;
-    uint32          OptionBroadcastTextID;
-    uint32          option_id;
-    uint32          npc_option_npcflag;
-    int32           action_menu_id;
-    uint32          action_poi_id;
-    uint32          action_script_id;
-    bool            box_coded;
+    uint32          option_broadcast_text = 0;
+    uint32          option_id = 0;
+    uint32          npc_option_npcflag = 0;
+    int32           action_menu_id = 0;
+    uint32          action_poi_id = 0;
+    uint32          action_script_id = 0;
+    bool            box_coded = false;
     std::string     box_text;
-    uint32          BoxBroadcastTextID;
-    uint16          conditionId;
+    uint32          box_broadcast_text = 0;
+    uint32          condition_id = 0;
 };
 
 struct GossipMenus
 {
-    uint32          entry;
-    uint32          text_id;
-    uint16          conditionId;
+    uint32          entry = 0;
+    uint32          text_id = 0;
+    uint32          script_id = 0;
+    uint32          condition_id = 0;
 };
 
 typedef std::multimap<uint32,GossipMenus> GossipMenusMap;
@@ -630,6 +631,7 @@ class ObjectMgr
         void LoadGameobjectInfo();
         void CheckGameObjectInfos();
         void AddGameobjectInfo(GameObjectInfo* goinfo);
+        void LoadGameObjectDisplayInfoAddon();
         void LoadGameobjectsRequirements();
         GameObjectUseRequirement const* GetGameObjectUseRequirement(ObjectGuid guid) const;
         std::map<uint32, GameObjectUseRequirement> _gobjRequirements;
@@ -650,11 +652,6 @@ class ObjectMgr
         static CreatureDataAddon const* GetCreatureAddon(uint32 lowguid)
         {
             return sCreatureDataAddonStorage.LookupEntry<CreatureDataAddon>(lowguid);
-        }
-
-        static CreatureDataAddon const* GetCreatureTemplateAddon(uint32 entry)
-        {
-            return sCreatureInfoAddonStorage.LookupEntry<CreatureDataAddon>(entry);
         }
 
         static ItemPrototype const* GetItemPrototype(uint32 id) { return sItemStorage.LookupEntry<ItemPrototype>(id); }
@@ -891,8 +888,9 @@ class ObjectMgr
 
         void LoadNpcGossips();
 
-        void LoadGossipMenu();
-        void LoadGossipMenuItems();
+        void LoadGossipMenus();
+        void LoadGossipMenu(std::set<uint32>& gossipScriptSet);
+        void LoadGossipMenuItems(std::set<uint32>& gossipScriptSet);
 
         void LoadVendorTemplates();
         void LoadVendors() { LoadVendors("npc_vendor", false); }
@@ -1472,7 +1470,6 @@ class ObjectMgr
 
     private:
         void LoadCreatureAddons(SQLStorage& creatureaddons, char const* entryName, char const* comment);
-        void ConvertCreatureAddonAuras(CreatureDataAddon* addon, char const* table, char const* guidEntryStr);
         void LoadQuestRelationsHelper(QuestRelationsMap& map, char const* table);
         void LoadVendors(char const* tableName, bool isTemplates);
         void LoadTrainers(char const* tableName, bool isTemplates);

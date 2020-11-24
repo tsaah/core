@@ -133,7 +133,6 @@ set (SCRIPTS_SRCS
     eastern_kingdoms/elwynn_forest/elwynn_forest.cpp
     eastern_kingdoms/hillsbrad_foothills/hillsbrad_foothills.cpp
     eastern_kingdoms/hinterlands/hinterlands.cpp
-    eastern_kingdoms/ironforge/ironforge.cpp
     eastern_kingdoms/loch_modan/loch_modan.cpp
     eastern_kingdoms/redridge_mountains/redridge_mountains.cpp
     eastern_kingdoms/searing_gorge/searing_gorge.cpp
@@ -160,7 +159,6 @@ set (SCRIPTS_SRCS
     eastern_kingdoms/swamp_of_sorrows/swamp_of_sorrows.cpp
     eastern_kingdoms/swamp_of_sorrows/sunken_temple/instance_sunken_temple.cpp
     eastern_kingdoms/swamp_of_sorrows/sunken_temple/sunken_temple.cpp
-    eastern_kingdoms/tirisfal_glades/tirisfal_glades.cpp
     eastern_kingdoms/tirisfal_glades/scarlet_monastery/boss_arcanist_doan.cpp
     eastern_kingdoms/tirisfal_glades/scarlet_monastery/boss_azshir_the_sleepless.cpp
     eastern_kingdoms/tirisfal_glades/scarlet_monastery/boss_bloodmage_thalnos.cpp
@@ -220,7 +218,6 @@ set (SCRIPTS_SRCS
     kalimdor/feralas/dire_maul/boss_zevrim.cpp
     kalimdor/feralas/dire_maul/dreadsteed_ritual.cpp
     kalimdor/feralas/dire_maul/instance_dire_maul.cpp
-    kalimdor/feralas/dire_maul/npc_pusillin.cpp
     kalimdor/moonglade/boss_omen.cpp
     kalimdor/moonglade/moonglade.cpp
     kalimdor/mulgore/mulgore.cpp

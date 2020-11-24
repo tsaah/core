@@ -50,9 +50,6 @@ enum CombatBotSpells
     PET_RAPTOR  = 3254,
     PET_TURTLE  = 3461,
     PET_HYENA   = 4127,
-
-    ITEM_ARROW  = 2512,
-    ITEM_BULLET = 2516,
 };
 
 void CombatBotBaseAI::AutoAssignRole()
@@ -194,6 +191,9 @@ void CombatBotBaseAI::PopulateSpellData()
     SpellEntry const* pPolymorphCow = nullptr;
     SpellEntry const* pPolymorphPig = nullptr;
     SpellEntry const* pPolymorphTurtle = nullptr;
+
+    // Mage Frost Armor (to replace ice armor at low level)
+    SpellEntry const* pFrostArmor = nullptr;
 
     bool hasDeadlyPoison = false;
     bool hasInstantPoison = false;
@@ -733,6 +733,12 @@ void CombatBotBaseAI::PopulateSpellData()
                         m_spells.mage.pIceArmor->Id < pSpellEntry->Id)
                         m_spells.mage.pIceArmor = pSpellEntry;
                 }
+                if (pSpellEntry->SpellName[0].find("Frost Armor") != std::string::npos)
+                {
+                    if (!pFrostArmor ||
+                        pFrostArmor->Id < pSpellEntry->Id)
+                        pFrostArmor = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Ice Barrier") != std::string::npos)
                 {
                     if (!m_spells.mage.pIceBarrier ||
@@ -799,7 +805,7 @@ void CombatBotBaseAI::PopulateSpellData()
                         m_spells.mage.pBlink->Id < pSpellEntry->Id)
                         m_spells.mage.pBlink = pSpellEntry;
                 }
-                else if (pSpellEntry->Id == (12826)) // Sheep
+                else if (pSpellEntry->SpellName[0] == "Polymorph") // Sheep
                 {
                     if (!pPolymorphSheep ||
                         pPolymorphSheep->Id < pSpellEntry->Id)
@@ -1979,6 +1985,9 @@ void CombatBotBaseAI::PopulateSpellData()
         }
         case CLASS_MAGE:
         {
+            if (!m_spells.mage.pIceArmor && pFrostArmor)
+                m_spells.mage.pIceArmor = pFrostArmor;
+
             std::vector<SpellEntry const*> polymorph;
             if (pPolymorphSheep)
                 polymorph.push_back(pPolymorphSheep);
@@ -2043,6 +2052,35 @@ void CombatBotBaseAI::AddAllSpellReagents()
             }
         }
     }
+}
+
+
+bool CombatBotBaseAI::AreOthersOnSameTarget(ObjectGuid guid, bool checkMelee, bool checkSpells) const
+{
+    Group* pGroup = me->GetGroup();
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            // Not self.
+            if (pMember == me)
+                continue;
+
+            // Not the target itself.
+            if (pMember->GetObjectGuid() == guid)
+                continue;
+
+            if (pMember->GetTargetGuid() == guid)
+            {
+                if (checkMelee && pMember->HasUnitState(UNIT_STAT_MELEE_ATTACKING))
+                    return true;
+
+                if (checkSpells && pMember->IsNonMeleeSpellCasted())
+                    return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool CombatBotBaseAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPercent)
@@ -2166,15 +2204,15 @@ Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPe
                     continue;
 
                 // Avoid all healers picking same target.
-                if (pTarget && !urand(0, 4))
-                    return pTarget;
+                if (pTarget && !IsTankClass(pMember->GetClass()) && AreOthersOnSameTarget(pMember->GetObjectGuid(), false, true))
+                    continue;
 
                 // Check if we should heal party member.
                 if ((IsValidHealTarget(pMember, groupHealPercent) &&
                     healthPercent > pMember->GetHealthPercent()) ||
                     // Or a pet if there are no injured players.
                     (!pTarget && (pMember = pMember->GetPet()) &&
-                        IsValidHealTarget(pMember, groupHealPercent)))
+                      IsValidHealTarget(pMember, groupHealPercent)))
                 {
                     healthPercent = pMember->GetHealthPercent();
                     pTarget = pMember;
@@ -2380,10 +2418,10 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (me->GetLevel() < 10)
             return;
 
-        std::vector<uint32> vPets = { PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
-                                      PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
-                                      PET_SCORPID, PET_SERPENT, PET_RAPTOR, PET_TURTLE, PET_HYENA };
-        if (Creature* pCreature = me->SummonCreature(SelectRandomContainerElement(vPets),
+        uint32 petId = PickRandomValue( PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
+                                        PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
+                                        PET_SCORPID, PET_SERPENT, PET_RAPTOR, PET_TURTLE, PET_HYENA );
+        if (Creature* pCreature = me->SummonCreature(petId,
             me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f,
             TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000))
         {
@@ -2412,10 +2450,10 @@ void CombatBotBaseAI::SummonPetIfNeeded()
 
 bool CombatBotBaseAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
-    if (me->HasSpellCooldown(pSpellEntry->Id))
+    if (!me->IsSpellReady(pSpellEntry->Id))
         return false;
 
-    if (me->GetGlobalCooldownMgr().HasGlobalCooldown(pSpellEntry))
+    if (me->HasGCD(pSpellEntry))
         return false;
 
     if (pSpellEntry->TargetAuraState &&

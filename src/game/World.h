@@ -514,6 +514,7 @@ enum eConfigBoolValues
     CONFIG_BOOL_VMAP_INDOOR_CHECK,
     CONFIG_BOOL_PET_UNSUMMON_AT_MOUNT,
     CONFIG_BOOL_ENABLE_DK,
+    CONFIG_BOOL_ENABLE_CITY_PROTECTOR,
     CONFIG_BOOL_ENABLE_MOVEMENT_INTERP,
     CONFIG_BOOL_WHISPER_RESTRICTION,
     CONFIG_BOOL_MAILSPAM_ITEM,
@@ -907,6 +908,10 @@ class World
         **/
         void InvalidatePlayerDataToAllClient(ObjectGuid guid);
 
+        static uint32 GetCurrentMSTime() { return m_currentMSTime; }
+        static TimePoint GetCurrentClockTime() { return m_currentTime; }
+        static uint32 GetCurrentDiff() { return m_currentDiff; }
+
         // Manually override timer update secs to force a faster update
         void SetWorldUpdateTimer(WorldTimers timer, uint32 current);
         time_t GetWorldUpdateTimer(WorldTimers timer);
@@ -1004,6 +1009,10 @@ class World
 
         // Packet broadcaster
         std::unique_ptr<MovementBroadcaster> m_broadcaster;
+
+        static uint32 m_currentMSTime;
+        static TimePoint m_currentTime;
+        static uint32 m_currentDiff;
 };
 
 extern uint32 realmID;

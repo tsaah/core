@@ -398,7 +398,7 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry, uint32 petnumber, bool c
 
     if (getPetType() == HUNTER_PET)
     {
-        SetByteValue(UNIT_FIELD_BYTES_1, 1, m_pTmpCache->loyalty);
+        SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_PET_LOYALTY, m_pTmpCache->loyalty);
 
         SetUInt32Value(UNIT_FIELD_FLAGS, m_pTmpCache->renamed ? UNIT_FLAG_PET_ABANDON : UNIT_FLAG_PET_RENAME | UNIT_FLAG_PET_ABANDON);
 
@@ -888,7 +888,7 @@ HappinessState Pet::GetHappinessState() const
 
 void Pet::SetLoyaltyLevel(LoyaltyLevel level)
 {
-    SetByteValue(UNIT_FIELD_BYTES_1, 1, level);
+    SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_PET_LOYALTY, level);
 }
 
 bool Pet::CanTakeMoreActiveSpells(uint32 spellid)
@@ -1308,11 +1308,11 @@ bool Pet::CreateBaseAtCreature(Creature* creature)
     m_loyaltyPoints = 1000;
     if (cinfo->type == CREATURE_TYPE_BEAST)
     {
-        SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
-        SetByteValue(UNIT_FIELD_BYTES_0, 2, GENDER_NONE);
-        SetByteValue(UNIT_FIELD_BYTES_0, 3, POWER_FOCUS);
+        SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, CLASS_WARRIOR);
+        SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, GENDER_NONE);
+        SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_POWER_TYPE, POWER_FOCUS);
         SetSheath(SHEATH_STATE_MELEE);
-        SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
+        SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
         SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME | UNIT_FLAG_PET_ABANDON);
 
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_12_1
@@ -1349,10 +1349,10 @@ bool Pet::InitStatsForLevel(uint32 petlevel, Unit* owner)
             SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_NONE);
             break;
         case HUNTER_PET:
-            SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
-            SetByteValue(UNIT_FIELD_BYTES_0, 2, GENDER_NONE);
+            SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, CLASS_WARRIOR);
+            SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, GENDER_NONE);
             SetSheath(SHEATH_STATE_MELEE);
-            SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
+            SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
 
             // this enables popup window (pet abandon, cancel), original value set in CreateBaseAtCreature
             SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_ABANDON);
@@ -1556,88 +1556,61 @@ uint32 Pet::GetCurrentFoodBenefitLevel(uint32 itemlevel) const
     //food too low level
 }
 
-void Pet::ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs)
-{
-    // last check 1.12
-    WorldPacket data(SMSG_SPELL_COOLDOWN, 8);
-    data << GetObjectGuid();
-    time_t curTime = time(nullptr);
-    for (const auto& itr : m_petSpells)
-    {
-        if (itr.second.state == PETSPELL_REMOVED)
-            continue;
-        uint32 unSpellId = itr.first;
-        SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(unSpellId);
-        if (!spellInfo)
-        {
-            MANGOS_ASSERT(spellInfo);
-            continue;
-        }
-
-        // Not send cooldown for this spells
-        if (spellInfo->Attributes & SPELL_ATTR_DISABLED_WHILE_ACTIVE)
-            continue;
-
-        if ((idSchoolMask & spellInfo->GetSpellSchoolMask()) && GetSpellCooldownDelay(unSpellId) < unTimeMs)
-        {
-            data << uint32(unSpellId);
-            data << uint32(unTimeMs);                       // in m.secs
-            AddSpellCooldown(unSpellId, 0, curTime + unTimeMs / IN_MILLISECONDS);
-        }
-    }
-    if (Player* player = GetAffectingPlayer())
-        player->GetSession()->SendPacket(&data);
-    Unit::ProhibitSpellSchool(idSchoolMask, unTimeMs);
-}
-
 void Pet::_LoadSpellCooldowns()
 {
     //QueryResult* result = CharacterDatabase.PQuery("SELECT spell,time FROM pet_spell_cooldown WHERE guid = '%u'",m_charmInfo->GetPetNumber());
 
     if (m_pTmpCache)
     {
-        time_t curTime = time(nullptr);
-        bool empty = true;
-
-        WorldPacket data(SMSG_SPELL_COOLDOWN, (8 + size_t(m_pTmpCache->spellCooldown.size()) * 8));
-        data << ObjectGuid(GetObjectGuid());
-        //[-ZERO] data << uint8(0x0);                                 // flags (0x1, 0x2)
+        ByteBuffer cdData;
+        uint32 cdCount = 0;
+        auto curTime = sWorld.GetCurrentClockTime();
 
         for (const auto& it : m_pTmpCache->spellCooldown)
         {
             //Field* fields = result->Fetch();
 
-            uint32 spell_id = it.spell;//fields[0].GetUInt32();
-            time_t db_time  = (time_t)it.time;//fields[1].GetUInt64();
-            time_t db_cat_time = 0; // TODO ?
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spell_id);
+            uint32 spell_id = it.spell; //fields[0].GetUInt32();
+            uint64 spell_time = it.time; //fields[1].GetUInt64();
 
-            if (!spell)
+            SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spell_id);
+            if (!spellEntry)
             {
-                sLog.outError("Pet %u have unknown spell %u in `pet_spell_cooldown`, skipping.", m_charmInfo->GetPetNumber(), spell_id);
+                sLog.outError("%s has unknown spell %u in `character_spell_cooldown`, skipping.", GetGuidStr().c_str(), spell_id);
                 continue;
             }
 
+            TimePoint spellExpireTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::from_time_t(spell_time));
+            std::chrono::milliseconds spellRecTime = std::chrono::milliseconds::zero();
+            if (spellExpireTime > curTime)
+                spellRecTime = std::chrono::duration_cast<std::chrono::milliseconds>(spellExpireTime - curTime);
+
             // skip outdated cooldown
-            if (db_time <= curTime)
+            if (spellRecTime == std::chrono::milliseconds::zero())
                 continue;
 
-            data << uint32(spell_id);
-            data << uint32(uint32(db_time - curTime)*IN_MILLISECONDS);
+            cdData << uint32(spell_id);
+            cdData << uint32(uint32(spellRecTime.count()));
+            ++cdCount;
 
-            AddSpellCooldown(spell_id, 0, db_time, db_cat_time, spell->Category);
-            empty = false;
-
-            DEBUG_LOG("Pet (Number: %u) spell %u cooldown loaded (%u secs).", m_charmInfo->GetPetNumber(), spell_id, uint32(db_time - curTime));
+            m_cooldownMap.AddCooldown(sWorld.GetCurrentClockTime(), spell_id, uint32(spellRecTime.count()));
+#ifdef _DEBUG
+            uint32 spellCDDuration = std::chrono::duration_cast<std::chrono::seconds>(spellRecTime).count();
+            sLog.outDebug("Adding spell cooldown to %s, SpellID(%u), recDuration(%us).", GetGuidStr().c_str(), spell_id, spellCDDuration);
+#endif
         }
         //while (result->NextRow());
 
         //delete result;
 
-        if (!empty)
-            if (Unit* owner = GetOwner())
-                if (owner->ToPlayer())
-                    owner->ToPlayer()->GetSession()->SendPacket(&data);
+        if (cdCount && GetOwner() && GetOwner()->GetTypeId() == TYPEID_PLAYER)
+        {
+            WorldPacket data(SMSG_SPELL_COOLDOWN, 8 + 1 + cdData.size());
+            data << GetObjectGuid();
+            //data << uint8(0x0);                                     // flags (0x1, 0x2)
+            data.append(cdData);
+            static_cast<Player*>(GetOwner())->GetSession()->SendPacket(&data);
+        }
     }
 }
 
@@ -1646,35 +1619,34 @@ void Pet::_SaveSpellCooldowns()
     if (m_pTmpCache)
         m_pTmpCache->spellCooldown.clear();
 
-    static SqlStatementID delSpellCD ;
-    static SqlStatementID insSpellCD ;
+    static SqlStatementID delSpellCD;
+    static SqlStatementID insSpellCD;
 
     SqlStatement stmt = CharacterDatabase.CreateStatement(delSpellCD, "DELETE FROM pet_spell_cooldown WHERE guid = ?");
     stmt.PExecute(m_charmInfo->GetPetNumber());
 
-    time_t curTime = time(nullptr);
-    time_t infTime = curTime + infinityCooldownDelayCheck;
+    TimePoint currTime = sWorld.GetCurrentClockTime();
 
-    // remove outdated and save active
-    for (SpellCooldowns::iterator itr = m_spellCooldowns.begin(); itr != m_spellCooldowns.end();)
+    for (auto& cdItr : m_cooldownMap)
     {
-        if (itr->second.end <= curTime)
-            m_spellCooldowns.erase(itr++);
-        else if (itr->second.end <= infTime)                // not save locked cooldowns, it will be reset or set at reload
+        auto& cdData = cdItr.second;
+        if (!cdData->IsPermanent())
         {
+            TimePoint sTime = currTime;
+            cdData->GetSpellCDExpireTime(sTime);
+            uint64 spellExpireTime = uint64(Clock::to_time_t(sTime));
+
             if (m_pTmpCache)
             {
                 PetSpellCoodown cd;
-                cd.spell = itr->first;
-                cd.time  = itr->second.end;
+                cd.spell = cdItr.first;
+                cd.time = spellExpireTime;
                 m_pTmpCache->spellCooldown.push_back(cd);
             }
-            stmt = CharacterDatabase.CreateStatement(insSpellCD, "INSERT INTO pet_spell_cooldown (guid, spell, time) VALUES( ?, ?, ?)");
-            stmt.PExecute(m_charmInfo->GetPetNumber(), itr->first, uint64(itr->second.end));
-            ++itr;
+
+            stmt = CharacterDatabase.CreateStatement(insSpellCD, "INSERT INTO pet_spell_cooldown (guid,spell,time) VALUES (?, ?, ?)");
+            stmt.PExecute(m_charmInfo->GetPetNumber(), cdItr.first, spellExpireTime);
         }
-        else
-            ++itr;
     }
 }
 
@@ -2291,7 +2263,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
         return false;
 
     SetSheath(SHEATH_STATE_MELEE);
-    SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
+    SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_AURAS | UNIT_BYTE2_FLAG_UNK5);
 
     if (getPetType() == MINI_PET)                           // always non-attackable
         SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);

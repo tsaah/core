@@ -62,7 +62,7 @@ enum eScriptCommand
                                                             // datalong = chat_type (see enum ChatType)
                                                             // dataint = broadcast_text id. dataint2-4 optional for random selected text.
     SCRIPT_COMMAND_EMOTE                    = 1,            // source = Unit
-                                                            // datalong = emote_id
+                                                            // datalong1-4 = emote_id
     SCRIPT_COMMAND_FIELD_SET                = 2,            // source = Object
                                                             // datalong = field_id
                                                             // datalong2 = value
@@ -104,7 +104,7 @@ enum eScriptCommand
                                                             // datalong4 = unique_distance
                                                             // dataint = eSummonCreatureFlags
                                                             // dataint2 = script_id
-                                                            // dataint3 = attack_target (see enum Target)
+                                                            // dataint3 = attack_target (see enum ScriptTarget)
                                                             // dataint4 = despawn_type (see enum TempSummonType)
                                                             // x/y/z/o = coordinates
     SCRIPT_COMMAND_OPEN_DOOR                = 11,           // source = GameObject (from datalong, provided source or target)
@@ -338,6 +338,10 @@ enum eScriptCommand
                                                             // target = WorldObject (from provided source or target)
     SCRIPT_COMMAND_SET_GOSSIP_MENU          = 84,           // source = Creature
                                                             // datalong = gossip_menu_id
+    SCRIPT_COMMAND_SEND_SCRIPT_EVENT        = 85,           // source = Creature
+                                                            // target = WorldObject
+                                                            // datalong = event_id
+                                                            // datalong2 = event_data
     SCRIPT_COMMAND_MAX,
 
     SCRIPT_COMMAND_DISABLED                 = 9999          // Script action was disabled during loading.
@@ -524,12 +528,7 @@ struct ScriptInfo
 
         struct                                              // SCRIPT_COMMAND_EMOTE (1)
         {
-            uint32 emoteId;                                 // datalong
-            uint32 unused1;                                 // datalong2
-            uint32 unused2;                                 // datalong3
-            uint32 unused3;                                 // datalong4
-            uint32 unused4;                                 // data_flags
-            uint32 randomEmotes[MAX_EMOTE_ID];              // dataint to dataint4
+            uint32 emoteId[MAX_EMOTE_ID];                   // datalong to datalong4
         } emote;
 
         struct                                              // SCRIPT_COMMAND_FIELD_SET (2)
@@ -1024,6 +1023,12 @@ struct ScriptInfo
             uint32 gossipMenuId;                            // datalong
         } setGossipMenu;
 
+        struct                                              // SCRIPT_COMMAND_SEND_SCRIPT_EVENT (85)
+        {
+            uint32 eventId;                                 // datalong
+            uint32 eventData;                               // datalong2
+        } sendScriptEvent;
+
         struct
         {
             uint32 data[9];
@@ -1082,6 +1087,7 @@ extern ScriptMapMap sSpellScripts;
 extern ScriptMapMap sCreatureSpellScripts;
 extern ScriptMapMap sGameObjectScripts;
 extern ScriptMapMap sEventScripts;
+extern ScriptMapMap sGenericScripts;
 extern ScriptMapMap sGossipScripts;
 extern ScriptMapMap sCreatureMovementScripts;
 extern ScriptMapMap sCreatureAIScripts;
@@ -1301,6 +1307,7 @@ class ScriptMgr
         void LoadEventScripts();
         void LoadSpellScripts();
         void LoadCreatureSpellScripts();
+        void LoadGenericScripts();
         void LoadGossipScripts();
         void LoadCreatureMovementScripts();
         void LoadCreatureEventAIScripts();
@@ -1387,6 +1394,7 @@ class ScriptMgr
 
     private:
         void CollectPossibleEventIds(std::set<uint32>& eventIds);
+        void CollectPossibleGenericIds(std::set<uint32>& eventIds);
         void LoadScripts(ScriptMapMap& scripts, char const* tablename);
         void CheckScriptTexts(ScriptMapMap const& scripts);
 

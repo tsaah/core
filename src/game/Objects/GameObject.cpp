@@ -46,6 +46,25 @@
 #include "ZoneScript.h"
 #include "DynamicTree.h"
 #include "vmap/GameObjectModel.h"
+#include <G3D/Box.h>
+#include <G3D/CoordinateFrame.h>
+#include <G3D/Quat.h>
+
+bool QuaternionData::isUnit() const
+{
+    return fabs(x * x + y * y + z * z + w * w - 1.0f) < 1e-5f;
+}
+
+void QuaternionData::toEulerAnglesZYX(float& Z, float& Y, float& X) const
+{
+    G3D::Matrix3(G3D::Quat(x, y, z, w)).toEulerAnglesZYX(Z, Y, X);
+}
+
+QuaternionData QuaternionData::fromEulerAnglesZYX(float Z, float Y, float X)
+{
+    G3D::Quat quat(G3D::Matrix3::fromEulerAnglesZYX(Z, Y, X));
+    return QuaternionData(quat.x, quat.y, quat.z, quat.w);
+}
 
 GameObject::GameObject() : WorldObject(),
     loot(this),
@@ -272,6 +291,8 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
         return;
     }
 
+    UpdateCooldowns(sWorld.GetCurrentClockTime());
+
     m_Events.Update(update_diff);
 
     // remove finished spells from current pointers
@@ -490,12 +511,15 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
                         // Some may have have animation and/or are expected to despawn.
                         switch (GetDisplayId())
                         {
-                            case 3073:
-                            case 4392:
-                            case 4472:
-                            case 4491:
-                            case 6785:
-                            case 6747: //sapphiron birth
+                            case 3071: // freezing trap
+                            case 3072: // explosive trap
+                            case 3073: // frost trap, fixed trap
+                            case 3074: // immolation trap
+                            case 4392: // lava fissure
+                            case 4472: // lava fissure
+                            case 4491: // mortar in dun morogh
+                            case 6785: // plague fissure
+                            case 6747: // sapphiron birth
                                 SendGameObjectCustomAnim();
                                 break;
                         }
@@ -517,19 +541,11 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
         {
             switch (GetGoType())
             {
-                case GAMEOBJECT_TYPE_DOOR: // Ustaag <Nostalrius>
-                {
-                    if ((m_cooldownTime < time(nullptr)) && (GetGOInfo()->GetAutoCloseTime() != 0))
-                        ResetDoorOrButton();
-                    break;
-                }
+                case GAMEOBJECT_TYPE_DOOR:
                 case GAMEOBJECT_TYPE_BUTTON:
-                {
-                    if ((m_cooldownTime < time(nullptr)) && (GetGOInfo()->GetAutoCloseTime() != 0))  // Ustaag <Nostalrius>
-                        //if (m_respawnDelayTime && (m_cooldownTime < time(nullptr)))
+                    if (GetGOInfo()->GetAutoCloseTime() && (m_cooldownTime < time(nullptr)))
                         ResetDoorOrButton();
                     break;
-                }
                 case GAMEOBJECT_TYPE_GOOBER:
                     if (m_cooldownTime < time(nullptr))
                     {
@@ -732,7 +748,7 @@ void GameObject::FinishRitual()
         // take spell cooldown
         if (GetOwner() && GetOwner()->IsPlayer())
             if (SpellEntry const* createBySpell = sSpellMgr.GetSpellEntry(GetSpellId()))
-                GetOwner()->CooldownEvent(createBySpell);
+                GetOwner()->AddCooldown(*createBySpell);
         if (!info->summoningRitual.ritualPersistent)
             SetLootState(GO_JUST_DEACTIVATED);
         // Only ritual of doom deals a second spell
@@ -1057,6 +1073,9 @@ bool GameObject::IsVisibleForInState(WorldObject const* pDetector, WorldObject c
 
         // despawned and then not visible for non-GM in GM-mode
         if (!isSpawned())
+            return false;
+
+        if (GetGOInfo()->IsServerOnly())
             return false;
 
         // special invisibility cases
@@ -2438,4 +2457,86 @@ bool GameObject::IsValidAttackTarget(Unit const* target) const
     }
 
     return true;
+}
+
+bool GameObject::IsAtInteractDistance(Player const* player, uint32 maxRange) const
+{
+    SpellEntry const* spellInfo;
+    if (maxRange || (spellInfo = GetSpellForLock(player)))
+    {
+        if (maxRange == 0.f)
+        {
+            SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+            maxRange = srange ? srange->maxRange : 0;
+        }
+
+        if (GetGoType() == GAMEOBJECT_TYPE_SPELL_FOCUS)
+            return maxRange * maxRange >= GetDistance3dToCenter(player);
+
+        if (sGameObjectDisplayInfoStore.LookupEntry(GetGOInfo()->displayId))
+            return IsAtInteractDistance(player->GetPosition(), maxRange);
+    }
+
+    return IsAtInteractDistance(player->GetPosition(), GetGOInfo()->GetInteractionDistance());
+}
+
+bool GameObject::IsAtInteractDistance(Position const& pos, float radius) const
+{
+    if (GameObjectDisplayInfoAddon const* displayInfo = sGameObjectDisplayInfoAddonStorage.LookupEntry<GameObjectDisplayInfoAddon>(GetDisplayId()))
+    {
+        float scale = GetObjectScale();
+
+        float minX = displayInfo->min_x * scale - radius;
+        float minY = displayInfo->min_y * scale - radius;
+        float minZ = displayInfo->min_z * scale - radius;
+        float maxX = displayInfo->max_x * scale + radius;
+        float maxY = displayInfo->max_y * scale + radius;
+        float maxZ = displayInfo->max_z * scale + radius;
+
+        QuaternionData worldRotation = GetLocalRotation();
+        G3D::Quat worldRotationQuat(worldRotation.x, worldRotation.y, worldRotation.z, worldRotation.w);
+
+        return G3D::CoordinateFrame{ { worldRotationQuat },{ GetPositionX(), GetPositionY(), GetPositionZ() } }
+            .toWorldSpace(G3D::Box{ { minX, minY, minZ },{ maxX, maxY, maxZ } })
+            .contains({ pos.x, pos.y, pos.z });
+    }
+
+    return GetDistance3dToCenter(pos) <= (radius * radius);
+}
+
+SpellEntry const* GameObject::GetSpellForLock(Player const* player) const
+{
+    if (!player)
+        return nullptr;
+
+    uint32 lockId = GetGOInfo()->GetLockId();
+    if (!lockId)
+        return nullptr;
+
+    LockEntry const* lock = sLockStore.LookupEntry(lockId);
+    if (!lock)
+        return nullptr;
+
+    for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+    {
+        if (!lock->Type[i])
+            continue;
+
+        if (lock->Type[i] != LOCK_KEY_SKILL)
+            break;
+
+        for (auto&& playerSpell : player->GetSpellMap())
+            if (SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(playerSpell.first))
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (spellInfo->Effect[i] == SPELL_EFFECT_OPEN_LOCK && ((uint32)spellInfo->EffectMiscValue[i]) == lock->Index[i])
+                        if (player->CalculateSpellDamage(nullptr, spellInfo, SpellEffectIndex(i), nullptr) >= int32(lock->Skill[i]))
+                            return spellInfo;
+    }
+
+    return nullptr;
+}
+
+const QuaternionData GameObject::GetLocalRotation() const
+{
+    return QuaternionData(GetFloatValue(GAMEOBJECT_ROTATION), GetFloatValue(GAMEOBJECT_ROTATION + 1), GetFloatValue(GAMEOBJECT_ROTATION + 2), GetFloatValue(GAMEOBJECT_ROTATION + 3));
 }

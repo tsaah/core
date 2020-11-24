@@ -981,7 +981,7 @@ void Aura::ReapplyAffectedPassiveAuras()
         case SPELLMOD_COOLDOWN:
         case SPELLMOD_COST:
         case SPELLMOD_ACTIVATION_TIME:
-        case SPELLMOD_CASTING_TIME_OLD:
+        case SPELLMOD_GLOBAL_COOLDOWN:
         case SPELLMOD_SPEED:
         case SPELLMOD_HASTE:
         case SPELLMOD_ATTACK_POWER:
@@ -2388,40 +2388,42 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
 
     if (apply)
     {
-
-
         Powers PowerType = POWER_MANA;
         switch (form)
         {
-        case FORM_CAT:
-            PowerType = POWER_ENERGY;
-            break;
-        case FORM_BEAR:
-        case FORM_DIREBEAR:
-            PowerType = POWER_RAGE;
-            break;
-        /*case FORM_TRAVEL:
-        case FORM_AQUA:
-        case FORM_GHOUL:
-        case FORM_CREATUREBEAR:
-        case FORM_GHOSTWOLF:
-        case FORM_MOONKIN:
-        case FORM_AMBIENT:
-        case FORM_SHADOW:
-        case FORM_STEALTH:
-        case FORM_TREE:
-        case FORM_SPIRITOFREDEMPTION:
-            break;*/
-        case FORM_BATTLESTANCE:
-        case FORM_BERSERKERSTANCE:
-        case FORM_DEFENSIVESTANCE:
-            PowerType = POWER_RAGE;
-            break;
-        default:
-            break;
+            case FORM_CAT:
+                PowerType = POWER_ENERGY;
+                break;
+            case FORM_BEAR:
+            case FORM_DIREBEAR:
+                PowerType = POWER_RAGE;
+                break;
+                /*case FORM_TRAVEL:
+                case FORM_AQUA:
+                case FORM_GHOUL:
+                case FORM_CREATUREBEAR:
+                case FORM_GHOSTWOLF:
+                case FORM_MOONKIN:
+                case FORM_AMBIENT:
+                case FORM_SHADOW:
+                case FORM_STEALTH:
+                case FORM_TREE:
+                case FORM_SPIRITOFREDEMPTION:
+                break;*/
+            case FORM_BATTLESTANCE:
+            case FORM_BERSERKERSTANCE:
+            case FORM_DEFENSIVESTANCE:
+                PowerType = POWER_RAGE;
+                break;
+            default:
+                break;
         }
+
         // remove other shapeshift before applying a new one
         target->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT, GetHolder());
+
+        if (!(ssEntry->flags1 & SHAPESHIFT_FORM_FLAG_ALLOW_ACTIVITY))
+            target->RemoveSpellsCausingAura(SPELL_AURA_WATER_WALK, GetHolder());
 
         if (PowerType != POWER_MANA)
         {
@@ -2635,7 +2637,7 @@ void Aura::HandleAuraTransform(bool apply, bool Real)
                     sLog.outError("Aura::HandleAuraTransform - Unknown creature id (%d) (only need its display_id) for spell %d.", m_modifier.m_miscvalue, GetId());
                 }
                 else
-                    display_id = Creature::ChooseDisplayId(ci, nullptr, nullptr, &displayScale);   // Will use the default display id here
+                    display_id = Creature::ChooseDisplayId(ci, nullptr, nullptr, nullptr, &displayScale);   // Will use the default display id here
 
                 // creature case, need to update equipment
                 if (ci && target->IsCreature())
@@ -3210,14 +3212,14 @@ void Aura::HandleModCharm(bool apply, bool Real)
                 if (cinfo && cinfo->type == CREATURE_TYPE_DEMON)
                 {
                     // creature with pet number expected have class set
-                    if (target->GetByteValue(UNIT_FIELD_BYTES_0, 1) == 0)
+                    if (target->GetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS) == 0)
                     {
                         if (cinfo->unit_class == 0)
                             sLog.outErrorDb("Creature (Entry: %u) have unit_class = 0 but used in charmed spell, that will be result client crash.", cinfo->entry);
                         else
                             sLog.outError("Creature (Entry: %u) have unit_class = %u but at charming have class 0!!! that will be result client crash.", cinfo->entry, cinfo->unit_class);
 
-                        target->SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_MAGE);
+                        target->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, CLASS_MAGE);
                     }
 
                     //just to enable stat window
@@ -3264,7 +3266,7 @@ void Aura::HandleModCharm(bool apply, bool Real)
             if (cinfo && caster && caster->IsPlayer() && caster->GetClass() == CLASS_WARLOCK && cinfo->type == CREATURE_TYPE_DEMON)
             {
                 // DB must have proper class set in field at loading, not req. restore, including workaround case at apply
-                // target->SetByteValue(UNIT_FIELD_BYTES_0, 1, cinfo->unit_class);
+                // target->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, cinfo->unit_class);
 
                 if (target->GetCharmInfo())
                     target->GetCharmInfo()->SetPetNumber(0, true);
@@ -3579,7 +3581,7 @@ void Aura::HandleModStealth(bool apply, bool Real)
         // only at real aura add
         if (Real)
         {
-            target->SetByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAGS_CREEP);
+            target->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_CREEP);
             if (target->GetTypeId() == TYPEID_PLAYER)
                 target->SetByteFlag(PLAYER_FIELD_BYTES2, 1, PLAYER_FIELD_BYTE2_STEALTH);
             // apply only if not in GM invisibility (and overwrite invisibility state)
@@ -3618,7 +3620,7 @@ void Aura::HandleModStealth(bool apply, bool Real)
             // if no GM invisibility
             if (target->GetVisibility() != VISIBILITY_OFF)
             {
-                target->RemoveByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAGS_CREEP);
+                target->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_CREEP);
                 if (target->GetTypeId() == TYPEID_PLAYER)
                     target->RemoveByteFlag(PLAYER_FIELD_BYTES2, 1, PLAYER_FIELD_BYTE2_STEALTH);
                 // restore invisibility if any
@@ -4768,6 +4770,7 @@ void Aura::HandleAuraModIncreaseEnergy(bool apply, bool /*Real*/)
     UnitMods unitMod = UnitMods(UNIT_MOD_POWER_START + powerType);
 
     target->HandleStatModifier(unitMod, TOTAL_VALUE, float(m_modifier.m_amount), apply);
+    target->ModifyPower(powerType, apply ? m_modifier.m_amount : -m_modifier.m_amount);
 }
 
 void Aura::HandleAuraModIncreaseEnergyPercent(bool apply, bool /*Real*/)
@@ -5408,9 +5411,9 @@ void Aura::HandleAuraEmpathy(bool apply, bool /*Real*/)
 void Aura::HandleAuraUntrackable(bool apply, bool /*Real*/)
 {
     if (apply)
-        GetTarget()->SetByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_UNTRACKABLE);
+        GetTarget()->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_UNTRACKABLE);
     else
-        GetTarget()->RemoveByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_UNTRACKABLE);
+        GetTarget()->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_UNTRACKABLE);
 }
 
 void Aura::HandleAuraModPacify(bool apply, bool /*Real*/)
@@ -5429,16 +5432,24 @@ void Aura::HandleAuraModPacifyAndSilence(bool apply, bool Real)
 
 void Aura::HandleAuraGhost(bool apply, bool /*Real*/)
 {
-    if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
-        return;
+    Unit* pTarget = GetTarget();
+    Player* pPlayer = pTarget->ToPlayer();
 
     if (apply)
-        GetTarget()->SetFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    {
+        GetTarget()->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_GHOST);
+        if (pPlayer)
+            GetTarget()->SetFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    }
     else
-        GetTarget()->RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    {
+        GetTarget()->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG, UNIT_VIS_FLAGS_GHOST);
+        if (pPlayer)
+            GetTarget()->RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    }
 
-    if (((Player*)GetTarget())->GetGroup())
-        ((Player*)GetTarget())->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_STATUS);
+    if (pPlayer && pPlayer->GetGroup())
+        pPlayer->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_STATUS);
 }
 
 void Aura::HandleShieldBlockValue(bool apply, bool /*Real*/)
@@ -6488,18 +6499,6 @@ void SpellAuraHolder::_AddSpellAuraHolder()
         }
     }
 
-    // set infinity cooldown state for spells
-    if (caster)
-    {
-        if (m_spellProto->Attributes & SPELL_ATTR_DISABLED_WHILE_ACTIVE)
-        {
-            Item* castItem = nullptr;
-            if (m_castItemGuid && caster->GetTypeId() == TYPEID_PLAYER)
-                castItem = ((Player*)caster)->GetItemByGuid(m_castItemGuid);
-            caster->AddSpellAndCategoryCooldowns(m_spellProto, castItem ? castItem->GetEntry() : 0, nullptr, true);
-        }
-    }
-
     SetAuraSlot(slot);
 
     // Not update fields for not first spell's aura, all data already in fields
@@ -6620,10 +6619,11 @@ void SpellAuraHolder::_RemoveSpellAuraHolder()
         }
 
         // reset cooldown state for spells
-        if (caster)
-            if (GetSpellProto()->Attributes & SPELL_ATTR_DISABLED_WHILE_ACTIVE)
-                // note: item based cooldowns and cooldown spell mods with charges ignored (unknown existing cases)
-                caster->CooldownEvent(GetSpellProto());
+        if (caster && GetSpellProto()->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+        {
+            // some spells need to start cooldown at aura fade (like stealth)
+            caster->AddCooldown(*GetSpellProto());
+        }
     }
 }
 

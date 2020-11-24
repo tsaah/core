@@ -451,18 +451,21 @@ int Master::Run()
     }
 
     ///- Clean account database before leaving
+    sLog.outString("Cleaning character database...");
     clearOnlineAccounts();
 
     // send all still queued mass mails (before DB connections shutdown)
+    sLog.outString("Sending queued mail...");
     sMassMailMgr.Update(true);
 
     ///- Wait for DB delay threads to end
+    sLog.outString("Closing database connections...");
     CharacterDatabase.StopServer();
     WorldDatabase.StopServer();
     LoginDatabase.StopServer();
     LogsDatabase.StopServer();
 
-    sLog.outString( "Halting process..." );
+    sLog.outString("Halting process...");
 
     if (cliThread)
     {

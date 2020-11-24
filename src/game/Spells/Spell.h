@@ -393,7 +393,7 @@ class Spell
         void SendSpellCooldown();
         void SendLogExecute();
         void SendInterrupted(uint8 result);
-        void SendChannelUpdate(uint32 time);
+        void SendChannelUpdate(uint32 time, bool interrupted = false);
         void SendChannelStart(uint32 duration);
         void SendResurrectRequest(Player* target);
 
@@ -495,10 +495,6 @@ class Spell
 
         int32 GetAbsorbedDamage() const { return m_absorbed; }
     protected:
-        bool HasGlobalCooldown() const;
-        void TriggerGlobalCooldown();
-        void CancelGlobalCooldown();
-
         void SendLoot(ObjectGuid guid, LootType loottype, LockType lockType);
         bool IgnoreItemRequirements() const;                // some item use spells have unexpected reagent data
         void UpdateOriginalCasterPointer();

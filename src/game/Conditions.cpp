@@ -38,7 +38,8 @@ char const* conditionSourceToStr[] =
     "spell_area",
     "scripted map event",
     "script action",
-    "areatrigger"
+    "areatrigger",
+    "quest template",
 };
 
 // Stores what params need to be provided to each condition type.
@@ -101,6 +102,7 @@ uint8 const ConditionTargetsInternal[] =
     CONDITION_REQ_MAP_OR_WORLDOBJECT, //  50
     CONDITION_REQ_TARGET_PLAYER,      //  51
     CONDITION_REQ_SOURCE_WORLDOBJECT, //  52
+    CONDITION_REQ_NONE,               //  53
 };
 
 // Starts from 4th element so that -3 will return first element.
@@ -556,10 +558,26 @@ bool inline ConditionEntry::Evaluate(WorldObject const* target, Map const* map, 
         case CONDITION_DB_GUID:
         {
             if (GameObject const* pGo = source->ToGameObject())
-                return pGo->GetDBTableGUIDLow() == m_value1;
+            {
+                if (uint32 dbGuid = pGo->GetDBTableGUIDLow())
+                    return (dbGuid == m_value1) || (dbGuid == m_value2) || (dbGuid == m_value3) || (dbGuid == m_value4);
+            }
             else if (Creature const* pCreature = source->ToCreature())
-                return pCreature->GetDBTableGUIDLow() == m_value1;
+            { 
+                if (uint32 dbGuid = pCreature->GetDBTableGUIDLow())
+                    return (dbGuid == m_value1) || (dbGuid == m_value2) || (dbGuid == m_value3) || (dbGuid == m_value4);
+            }
             return false;
+        }
+        case CONDITION_LOCAL_TIME:
+        {
+            time_t rawtime;
+            time(&rawtime);
+
+            struct tm* timeinfo;
+            timeinfo = localtime(&rawtime);
+
+            return (timeinfo->tm_hour >= m_value1) && (timeinfo->tm_min >= m_value2) && (timeinfo->tm_hour <= m_value3) && (timeinfo->tm_min <= m_value4);
         }
     }
     return false;
@@ -1136,6 +1154,31 @@ bool ConditionEntry::IsValid()
                 sLog.outErrorDb("CONDITION_DB_GUID (entry %u, type %d) uses non-existent guid %u in value1, skipped", m_entry, m_condition, m_value1);
                 return false;
             }
+            break;
+        }
+        case CONDITION_LOCAL_TIME:
+        {
+            if (m_value1 > 23)
+            {
+                sLog.outErrorDb("CONDITION_LOCAL_TIME (entry %u, type %d) has value1 greater than 23 hours (%u), skipped", m_entry, m_condition, m_value1);
+                return false;
+            }
+            if (m_value2 > 59)
+            {
+                sLog.outErrorDb("CONDITION_LOCAL_TIME (entry %u, type %d) has value2 greater than 59 minutes (%u), skipped", m_entry, m_condition, m_value2);
+                return false;
+            }
+            if (m_value3 > 23)
+            {
+                sLog.outErrorDb("CONDITION_LOCAL_TIME (entry %u, type %d) has value3 greater than 23 hours (%u), skipped", m_entry, m_condition, m_value3);
+                return false;
+            }
+            if (m_value4 > 59)
+            {
+                sLog.outErrorDb("CONDITION_LOCAL_TIME (entry %u, type %d) has value4 greater than 59 minutes (%u), skipped", m_entry, m_condition, m_value4);
+                return false;
+            }
+            break;
         }
         case CONDITION_NONE:
         case CONDITION_INSTANCE_SCRIPT:

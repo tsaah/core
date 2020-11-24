@@ -294,7 +294,7 @@ bool ChatHandler::HandleUnitInfoCommand(char* args)
     PSendSysMessage("Mount display id: %u", pTarget->GetMountID());
     PSendSysMessage("Stand state: %hhu", pTarget->GetStandState());
     PSendSysMessage("Shapeshift form: %hhu", pTarget->GetShapeshiftForm());
-    PSendSysMessage("Byte flags: %hhu", pTarget->GetByteValue(UNIT_FIELD_BYTES_1, 3));
+    PSendSysMessage("Vis flags: %hhu", pTarget->GetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAG));
     PSendSysMessage("Dynamic flags: %u", pTarget->GetUInt32Value(UNIT_DYNAMIC_FLAGS));
     if (auto pSpellEntry = sSpellMgr.GetSpellEntry(pTarget->GetUInt32Value(UNIT_CHANNEL_SPELL)))
         PSendSysMessage("Channel spell: %u - %s", pTarget->GetUInt32Value(UNIT_CHANNEL_SPELL), pSpellEntry->SpellName[0].c_str());
@@ -309,7 +309,7 @@ bool ChatHandler::HandleUnitInfoCommand(char* args)
     PSendSysMessage("Unit state flags: %u", pTarget->GetUnitState());
     PSendSysMessage("Death state: %hhu", pTarget->GetDeathState());
     PSendSysMessage("Sheath state: %hhu", pTarget->GetSheath());
-    PSendSysMessage("Byte flags 2: %hhu", pTarget->GetByteValue(UNIT_FIELD_BYTES_2, 1));
+    PSendSysMessage("Byte flags 2: %hhu", pTarget->GetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS));
 
     return true;
 }
@@ -2016,16 +2016,65 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
     return true;
 }
 
-// .cooldown <spell_id_or_0> <name>
-bool ChatHandler::HandleCooldownCommand(char* args)
+bool ChatHandler::HandleCooldownListCommand(char* /*args*/)
 {
-    uint32 spell_id = ExtractSpellIdFromLink(&args);   
-    std::string name = ExtractPlayerNameFromLink(&args);
     Unit* target = GetSelectedUnit();
+    if (!target)
+    {
+        SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
+        SetSentErrorMessage(true);
+        return false;
+    }
 
-    if (!name.empty())
-        target = sObjectMgr.GetPlayer(name.c_str());
+    target->PrintCooldownList(*this);
+    return true;
+}
 
+bool ChatHandler::HandleCooldownClearCommand(char* args)
+{
+    Unit* target = GetSelectedUnit();
+    if (!target)
+    {
+        SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::string tNameLink = "Unknown";
+    if (target->GetTypeId() == TYPEID_PLAYER)
+        tNameLink = GetNameLink(static_cast<Player*>(target));
+    else
+        tNameLink = target->GetName();
+
+    if (!*args)
+    {
+        target->RemoveAllCooldowns();
+        PSendSysMessage(LANG_REMOVEALL_COOLDOWN, tNameLink.c_str());
+    }
+    else
+    {
+        // number or [name] Shift-click form |color|Hspell:spell_id|h[name]|h|r or Htalent form
+        uint32 spell_id = ExtractSpellIdFromLink(&args);
+        if (!spell_id)
+            return false;
+
+        SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spell_id);
+        if (!spellEntry)
+        {
+            PSendSysMessage(LANG_UNKNOWN_SPELL, target == m_session->GetPlayer() ? GetMangosString(LANG_YOU) : tNameLink.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+
+        target->RemoveSpellCooldown(*spellEntry);
+        PSendSysMessage(LANG_REMOVE_COOLDOWN, spell_id, target == m_session->GetPlayer() ? GetMangosString(LANG_YOU) : tNameLink.c_str());
+    }
+    return true;
+}
+
+bool ChatHandler::HandleCooldownClearClientSideCommand(char*)
+{
+    Player* target = GetSelectedPlayer();
     if (!target)
     {
         SendSysMessage(LANG_PLAYER_NOT_FOUND);
@@ -2033,23 +2082,10 @@ bool ChatHandler::HandleCooldownCommand(char* args)
         return false;
     }
 
-    std::string tNameLink = target->ToPlayer() ? GetNameLink(target->ToPlayer()) : target->GetName();
+    std::string tNameLink = GetNameLink(target);
 
-    if (!spell_id) {
-        target->RemoveAllSpellCooldown();
-        PSendSysMessage(LANG_REMOVEALL_COOLDOWN, tNameLink.c_str());
-        return true;
-    }
-
-    if (!sSpellMgr.GetSpellEntry(spell_id))
-    {
-        PSendSysMessage(LANG_UNKNOWN_SPELL, target == m_session->GetPlayer() ? GetMangosString(LANG_YOU) : tNameLink.c_str());
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    target->RemoveSpellCooldown(spell_id, true);
-    PSendSysMessage(LANG_REMOVE_COOLDOWN, spell_id, target == m_session->GetPlayer() ? GetMangosString(LANG_YOU) : tNameLink.c_str());
+    target->RemoveAllCooldowns(true);
+    PSendSysMessage(LANG_REMOVEALL_COOLDOWN, tNameLink.c_str());
     return true;
 }
 

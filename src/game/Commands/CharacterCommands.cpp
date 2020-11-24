@@ -1883,7 +1883,7 @@ bool ChatHandler::HandleCharacterPremadeGearCommand(char* args)
         {
             if (itr.second.requiredClass == pPlayer->GetClass())
             {
-                PSendSysMessage("%u - %s", itr.first, itr.second.name.c_str());
+                PSendSysMessage("%u - %s (lvl %u)", itr.first, itr.second.name.c_str(), itr.second.level);
             }
         }
         return true;
@@ -1984,7 +1984,7 @@ bool ChatHandler::HandleCharacterPremadeSpecCommand(char* args)
         {
             if (itr.second.requiredClass == pPlayer->GetClass())
             {
-                PSendSysMessage("%u - %s", itr.first, itr.second.name.c_str());
+                PSendSysMessage("%u - %s (lvl %u)", itr.first, itr.second.name.c_str(), itr.second.level);
             }
         }
         return true;
@@ -2115,7 +2115,7 @@ bool ChatHandler::HandleCharacterCopySkinCommand(char* args)
         bytes2 |= (target->GetUInt32Value(PLAYER_BYTES_2) & 0xFFFFFF00);
         target->SetUInt32Value(PLAYER_BYTES, bytes);
         target->SetUInt32Value(PLAYER_BYTES_2, bytes2);
-        target->SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);
+        target->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, gender);
         SendSysMessage("Modification du skin/genre OK.");
         return true;
     }
@@ -2134,6 +2134,30 @@ bool ChatHandler::HandleCharacterFillFlysCommand(char* args)
         return true;
     }
     return false;
+}
+
+bool ChatHandler::HandleCharacterCityTitleCommand(char* args)
+{
+    Player* pPlayer = GetSelectedPlayer();
+    if (!pPlayer)
+    {
+        SendSysMessage(LANG_NO_CHAR_SELECTED);
+        return false;
+    }
+
+    bool value;
+    if (!ExtractOnOff(&args, value))
+    {
+        PSendSysMessage("Syntax: .title on | off");
+        return false;
+    }
+
+    if (value)
+        pPlayer->SetCityTitle();
+    else
+        pPlayer->RemoveCityTitle();
+
+    return true;
 }
 
 bool ChatHandler::HandleHonorShow(char* /*args*/)
@@ -2371,7 +2395,6 @@ bool ChatHandler::HandleHonorSetRPCommand(char *args)
     PSendSysMessage("You have changed rank points of %s to %g.", target->GetName(), value);
     return true;
 }
-
 
 bool ChatHandler::HandleLearnAllCommand(char* /*args*/)
 {
@@ -2948,8 +2971,7 @@ bool ChatHandler::HandleAddItemCommand(char* args)
 
     DETAIL_LOG(GetMangosString(LANG_ADDITEM), itemId, count);
 
-    ItemPrototype const* pProto = ObjectMgr::GetItemPrototype(itemId);
-    if (!pProto)
+    if (!ObjectMgr::GetItemPrototype(itemId))
     {
         PSendSysMessage(LANG_COMMAND_ITEMIDINVALID, itemId);
         SetSentErrorMessage(true);
@@ -3473,7 +3495,7 @@ static bool HandleResetStatsOrLevelHelper(Player* player)
 
     player->SetFactionForRace(player->GetRace());
 
-    player->SetByteValue(UNIT_FIELD_BYTES_0, 3, powertype);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_POWER_TYPE, powertype);
 
     // reset only if player not in some form;
     if (player->GetShapeshiftForm() == FORM_NONE)
@@ -3481,9 +3503,9 @@ static bool HandleResetStatsOrLevelHelper(Player* player)
 
     // is it need, only in pre-2.x used and field byte removed later?
     if (powertype == POWER_RAGE || powertype == POWER_MANA)
-        player->SetByteValue(UNIT_FIELD_BYTES_1, 1, 0xEE);
+        player->SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_PET_LOYALTY, 0xEE);
 
-    player->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_UNK5);
+    player->SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS, UNIT_BYTE2_FLAG_UNK3 | UNIT_BYTE2_FLAG_UNK5);
 
     player->SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
 
@@ -3583,6 +3605,57 @@ bool ChatHandler::HandleResetTalentsCommand(char* args)
         PSendSysMessage(LANG_RESET_TALENTS_OFFLINE, nameLink.c_str());
     }
 
+    return true;
+}
+
+bool ChatHandler::HandleResetItemsCommand(char* args)
+{
+    Player* pTarget;
+    ObjectGuid targetGuid;
+    std::string targetName;
+    if (!ExtractPlayerTarget(&args, &pTarget, &targetGuid, &targetName))
+        return false;
+
+    if (!pTarget)
+    {
+        PSendSysMessage(LANG_PLAYER_NOT_FOUND);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 count = 0;
+    for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
+    {
+        if (Item* pItem = pTarget->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+        {
+            pTarget->DestroyItem(INVENTORY_SLOT_BAG_0, i, true);
+            ++count;
+        }
+    }
+    for (int i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+    {
+        if (Item* pItem = pTarget->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+        {
+            pTarget->DestroyItem(INVENTORY_SLOT_BAG_0, i, true);
+            ++count;
+        }
+    }
+    for (int i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+    {
+        if (Bag* pBag = (Bag*)pTarget->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+        {
+            for (uint32 j = 0; j < pBag->GetBagSize(); ++j)
+            {
+                if (Item* pItem = pBag->GetItemByPos(j))
+                {
+                    pTarget->DestroyItem(i, j, true);
+                    ++count;
+                }
+            }
+        }
+    }
+
+    PSendSysMessage("Removed all items from %s.", targetName.c_str());
     return true;
 }
 
@@ -3887,7 +3960,7 @@ bool ChatHandler::HandleModifyGenderCommand(char *args)
     }
 
     // Set gender
-    player->SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, gender);
     player->SetUInt16Value(PLAYER_BYTES_3, 0, uint16(gender) | (player->GetDrunkValue() & 0xFFFE));
 
     // Change display ID
@@ -5033,7 +5106,7 @@ bool ChatHandler::HandlePetInfoCommand(char* args)
     PSendSysMessage("Info for %s", pPet->GetObjectGuid().GetString().c_str());
     PSendSysMessage("Owner: %s", pPet->GetOwnerGuid().GetString().c_str());
     PSendSysMessage("Pet type: %u", pPet->getPetType());
-    PSendSysMessage("Loyalty level: %hhu", pPet->GetByteValue(UNIT_FIELD_BYTES_1, 1));
+    PSendSysMessage("Loyalty level: %hhu", pPet->GetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_PET_LOYALTY));
     PSendSysMessage("Pet number: %u", pPet->GetUInt32Value(UNIT_FIELD_PETNUMBER));
     PSendSysMessage("Pet name timestamp: %u", pPet->GetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP));
     PSendSysMessage("Pet experience: %u", pPet->GetUInt32Value(UNIT_FIELD_PETEXPERIENCE));
@@ -5311,5 +5384,133 @@ bool ChatHandler::HandleCombatStopCommand(char* args)
 
     target->CombatStop();
     target->GetHostileRefManager().deleteReferences();
+    return true;
+}
+
+bool ChatHandler::HandleGroupAddItemCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 itemId = 0;
+    if (!ExtractUInt32(&args, itemId))
+        return false;
+
+    if (!ObjectMgr::GetItemPrototype(itemId))
+    {
+        PSendSysMessage(LANG_COMMAND_ITEMIDINVALID, itemId);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 count = 1;
+    ExtractOptUInt32(&args, count, 1);
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+
+            if (Item* pItem = pMember->StoreNewItemInInventorySlot(itemId, count))
+                pMember->SendNewItem(pItem, count, true, false);
+        }
+    }
+
+    PSendSysMessage("Added item %u to all group members.", itemId);
+    return true;
+}
+
+bool ChatHandler::HandleGroupReviveCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+
+            if (pMember->IsDead())
+            {
+                pMember->ResurrectPlayer(0.5f);
+                pMember->SpawnCorpseBones();
+            }
+        }
+    }
+
+    PSendSysMessage("Revived all dead group members.");
+    return true;
+}
+
+bool ChatHandler::HandleGroupReplenishCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+
+            if (pMember->IsAlive())
+            {
+                pMember->SetHealth(pMember->GetMaxHealth());
+                if (pMember->GetPowerType() == POWER_MANA)
+                    pMember->SetPower(POWER_MANA, pMember->GetMaxPower(POWER_MANA));
+            }
+        }
+    }
+
+    PSendSysMessage("Replenished all group members.");
+    return true;
+}
+
+bool ChatHandler::HandleGroupSummonCommand(char* args)
+{
+    Player* pPlayer = m_session->GetPlayer();
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+    {
+        SendSysMessage("You are not in a group.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        if (Player* pMember = itr->getSource())
+        {
+            if (pMember == pPlayer)
+                continue;
+
+            pMember->SendSummonRequest(pPlayer->GetObjectGuid(), pPlayer->GetMapId(), pPlayer->GetZoneId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ());
+        }
+    }
+
+    PSendSysMessage("Sent summon request to all group members.");
     return true;
 }

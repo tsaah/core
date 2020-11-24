@@ -58,7 +58,7 @@ bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_,
     ASSERT(botEntry);
     std::string name = sObjectMgr.GeneratePetName(1863); // Succubus name
     normalizePlayerName(name);
-    uint8 gender = pClone ? pClone->GetByteValue(UNIT_FIELD_BYTES_0, 2) : urand(0, 1);
+    uint8 gender = pClone ? pClone->GetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER) : urand(0, 1);
     uint8 skin = pClone ? pClone->GetByteValue(PLAYER_BYTES, 0) : urand(0, 5);
     uint8 face = pClone ? pClone->GetByteValue(PLAYER_BYTES, 1) : urand(0, 5);
     uint8 hairStyle = pClone ? pClone->GetByteValue(PLAYER_BYTES, 2) : urand(0, 5);
@@ -161,7 +161,7 @@ void MageOrgrimmarAttackerAI::UpdateAI(uint32 const diff)
     if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         me->GetMotionMaster()->MovementExpired();
     bool nearTarget = target && target->IsWithinMeleeRange(me);
-    if (!me->HasSpellCooldown(SPELL_FROST_NOVA) && me->GetPower(POWER_MANA) > 50)
+    if (me->IsSpellReady(SPELL_FROST_NOVA) && me->GetPower(POWER_MANA) > 50)
         if (nearTarget)
             me->CastSpell(me, SPELL_FROST_NOVA, false);
     if (nearTarget && target->HasUnitState(UNIT_STAT_CAN_NOT_MOVE))

@@ -573,6 +573,14 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
 
             updateMask->SetBit(GAMEOBJECT_DYN_FLAGS);
         }
+#if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_6_1
+        else if (isType(TYPEMASK_ITEM))
+        {
+            // Force include flags field in create object packet,
+            // because the static flags need to sent in that field.
+            updateMask->SetBit(ITEM_FIELD_FLAGS);
+        }
+#endif
     }
     else                                                    // case UPDATETYPE_VALUES
     {
@@ -833,7 +841,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
             }
         }
     }
-    else                                                    // other objects case (no special index checks)
+    else if (isType(TYPEMASK_CORPSE))
     {
         for (uint16 index = 0; index < m_valuesCount; ++index)
         {
@@ -856,6 +864,40 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                 else
                     // send in current format (float as float, uint32 as uint32)
                     *data << m_uint32Values[index];
+            }
+        }
+    }
+#if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_6_1
+    else if (isType(TYPEMASK_ITEM))
+    {
+        for (uint16 index = 0; index < m_valuesCount; ++index)
+        {
+            if (updateMask->GetBit(index))
+            {
+                // Static item flags are part of that field prior to patch 1.7.
+                if (index == ITEM_FIELD_FLAGS)
+                {
+                    if (ItemPrototype const* pProto = ObjectMgr::GetItemPrototype(GetEntry()))
+                        *data << uint16(pProto->Flags);
+                    else
+                        *data << uint16(0);
+                    *data << uint16(m_uint32Values[index]);
+                }
+                else
+                    // send in current format (float as float, uint32 as uint32)
+                    *data << m_uint32Values[index];
+            }
+        }
+    }
+#endif
+    else                                                    // other objects case (no special index checks)
+    {
+        for (uint16 index = 0; index < m_valuesCount; ++index)
+        {
+            if (updateMask->GetBit(index))
+            {
+                // send in current format (float as float, uint32 as uint32)
+                *data << m_uint32Values[index];
             }
         }
     }
@@ -1359,11 +1401,28 @@ float WorldObject::GetDistance2dToCenter(WorldObject const* target) const
     return (dist > 0 ? dist : 0);
 }
 
+float WorldObject::GetDistance2dToCenter(float x, float y) const
+{
+    float dx = GetPositionX() - x;
+    float dy = GetPositionY() - y;
+    float dist = sqrt((dx * dx) + (dy * dy));
+    return (dist > 0 ? dist : 0);
+}
+
 float WorldObject::GetDistance3dToCenter(WorldObject const* target) const
 {
     float dx = GetPositionX() - target->GetPositionX();
     float dy = GetPositionY() - target->GetPositionY();
     float dz = GetPositionZ() - target->GetPositionZ();
+    float dist = sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    return (dist > 0 ? dist : 0);
+}
+
+float WorldObject::GetDistance3dToCenter(float x, float y, float z) const
+{
+    float dx = GetPositionX() - x;
+    float dy = GetPositionY() - y;
+    float dz = GetPositionZ() - z;
     float dist = sqrt((dx * dx) + (dy * dy) + (dz * dz));
     return (dist > 0 ? dist : 0);
 }
@@ -2093,11 +2152,9 @@ Creature* Map::SummonCreature(uint32 entry, float x, float y, float z, float ang
 
     TemporarySummon* pCreature = new TemporarySummon();
 
-    Team team = TEAM_NONE;
-
     CreatureCreatePos pos(this, x, y, z, ang);
 
-    if (!pCreature->Create(GenerateLocalLowGuid(HIGHGUID_UNIT), pos, pInf, team, entry))
+    if (!pCreature->Create(GenerateLocalLowGuid(HIGHGUID_UNIT), pos, pInf, entry))
     {
         delete pCreature;
         return nullptr;
@@ -2141,16 +2198,12 @@ Creature* WorldObject::SummonCreature(uint32 id, float x, float y, float z, floa
 
     TemporarySummon* pCreature = new TemporarySummon(GetObjectGuid());
 
-    Team team = TEAM_NONE;
-    if (GetTypeId() == TYPEID_PLAYER)
-        team = ((Player*)this)->GetTeam();
-
     CreatureCreatePos pos(GetMap(), x, y, z, ang);
 
     if (x == 0.0f && y == 0.0f && z == 0.0f)
         pos = CreatureCreatePos(this, GetOrientation(), CONTACT_DISTANCE, ang);
 
-    if (!pCreature->Create(GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid()), pos, cinfo, team, id))
+    if (!pCreature->Create(GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid()), pos, cinfo, id))
     {
         delete pCreature;
         return nullptr;
@@ -3252,8 +3305,8 @@ ReputationRank WorldObject::GetReactionTo(WorldObject const* target) const
 
             // check FFA_PVP - not implemented that way on MaNGOS :/
             /*
-            if (GetByteValue(UNIT_FIELD_BYTES_2, 1) & UNIT_BYTE2_FLAG_FFA_PVP
-            && target->GetByteValue(UNIT_FIELD_BYTES_2, 1) & UNIT_BYTE2_FLAG_FFA_PVP)
+            if (GetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS) & UNIT_BYTE2_FLAG_FFA_PVP
+            && target->GetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_MISC_FLAGS) & UNIT_BYTE2_FLAG_FFA_PVP)
             return REP_HOSTILE;
             */
         }
@@ -3628,15 +3681,13 @@ SpellMissInfo WorldObject::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* 
         canParry = false;
     }
     // Check creatures flags_extra for disable parry
-    if (pVictim->GetTypeId() == TYPEID_UNIT)
-    {
-        uint32 flagEx = ((Creature*)pVictim)->GetCreatureInfo()->flags_extra;
-        if (flagEx & CREATURE_FLAG_EXTRA_NO_PARRY)
+    if (Creature* pCreatureVictim = pVictim->ToCreature())
+    { 
+        if (pCreatureVictim->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_PARRY))
             canParry = false;
     }
-
     // Check if the player can parry
-    if (pVictim->GetTypeId() == TYPEID_PLAYER)
+    else
     {
         if (!((Player*)pVictim)->CanParry())
             canParry = false;
@@ -4038,10 +4089,10 @@ uint32 WorldObject::CalcArmorReducedDamage(Unit* pVictim, uint32 const damage) c
     return (newdamage > 1) ? newdamage : 1;
 }
 
-int32 WorldObject::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProto, SpellEffectIndex effect_index, int32 const* effBasePoints, Spell* spell)
+int32 WorldObject::CalculateSpellDamage(Unit const* target, SpellEntry const* spellProto, SpellEffectIndex effect_index, int32 const* effBasePoints, Spell* spell) const
 {
-    Unit* pUnit = ToUnit();
-    Player* pPlayer = ToPlayer();
+    Unit const* pUnit = ToUnit();
+    Player const* pPlayer = ToPlayer();
 
     uint8 comboPoints = pPlayer ? pPlayer->GetComboPoints() : 0;
 
@@ -5314,4 +5365,277 @@ SpellCastResult WorldObject::CastSpell(float x, float y, float z, SpellEntry con
 bool WorldObject::isVisibleFor(Player const* u, WorldObject const* viewPoint) const
 {
     return IsVisibleForInState(u, viewPoint, false);
+}
+
+void WorldObject::AddGCD(SpellEntry const& spellEntry, uint32 forcedDuration /*= 0*/, bool /*updateClient = false*/)
+{
+    uint32 gcdRecTime = forcedDuration ? forcedDuration : spellEntry.StartRecoveryTime;
+    if (!gcdRecTime)
+        return;
+
+    m_GCDCatMap.emplace(spellEntry.StartRecoveryCategory, std::chrono::milliseconds(gcdRecTime) + sWorld.GetCurrentClockTime());
+}
+
+bool WorldObject::HasGCD(SpellEntry const* spellEntry) const
+{
+    if (spellEntry)
+    {
+        auto gcdItr = m_GCDCatMap.find(spellEntry->StartRecoveryCategory);
+        return gcdItr != m_GCDCatMap.end();
+    }
+
+    return !m_GCDCatMap.empty();
+}
+
+void WorldObject::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*itemProto = nullptr*/, bool /*permanent = false*/, uint32 forcedDuration /*= 0*/)
+{
+    uint32 recTimeDuration = forcedDuration ? forcedDuration : spellEntry.RecoveryTime;
+    if (recTimeDuration || spellEntry.CategoryRecoveryTime)
+        m_cooldownMap.AddCooldown(sWorld.GetCurrentClockTime(), spellEntry.Id, recTimeDuration, spellEntry.Category, spellEntry.CategoryRecoveryTime);
+}
+
+void WorldObject::UpdateCooldowns(TimePoint const& now)
+{
+    // handle GCD
+    auto cdItr = m_GCDCatMap.begin();
+    while (cdItr != m_GCDCatMap.end())
+    {
+        auto& cd = cdItr->second;
+        if (cd <= now)
+            cdItr = m_GCDCatMap.erase(cdItr);
+        else
+            ++cdItr;
+    }
+
+    // handle spell and category cooldowns
+    m_cooldownMap.Update(now);
+
+    // handle spell lockouts
+    auto lockoutCDItr = m_lockoutMap.begin();
+    while (lockoutCDItr != m_lockoutMap.end())
+    {
+        if (lockoutCDItr->second <= now)
+            lockoutCDItr = m_lockoutMap.erase(lockoutCDItr);
+        else
+            ++lockoutCDItr;
+    }
+}
+
+bool WorldObject::CheckLockout(SpellSchoolMask schoolMask) const
+{
+    for (auto& lockoutItr : m_lockoutMap)
+    {
+        SpellSchoolMask lockoutSchoolMask = SpellSchoolMask(1 << lockoutItr.first);
+        if (lockoutSchoolMask & schoolMask)
+            return true;
+    }
+
+    return false;
+}
+
+bool WorldObject::GetExpireTime(SpellEntry const& spellEntry, TimePoint& expireTime, bool& isPermanent) const
+{
+    auto spellItr = m_cooldownMap.FindBySpellId(spellEntry.Id);
+    if (spellItr != m_cooldownMap.end())
+    {
+        auto& cdData = spellItr->second;
+        if (cdData->IsPermanent())
+        {
+            isPermanent = true;
+            return true;
+        }
+
+        TimePoint spellExpireTime = TimePoint();
+        TimePoint catExpireTime = TimePoint();
+        bool foundSpellCD = cdData->GetSpellCDExpireTime(spellExpireTime);
+        bool foundCatCD = cdData->GetSpellCDExpireTime(catExpireTime);
+        if (foundCatCD || foundSpellCD)
+        {
+            expireTime = spellExpireTime > catExpireTime ? spellExpireTime : catExpireTime;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool WorldObject::IsSpellReady(SpellEntry const& spellEntry, ItemPrototype const* itemProto /*= nullptr*/) const
+{
+    uint32 spellCategory = spellEntry.Category;
+
+    // overwrite category by provided category in item prototype during item cast if need
+    if (itemProto)
+    {
+        for (const auto& Spell : itemProto->Spells)
+        {
+            if (Spell.SpellId == spellEntry.Id)
+            {
+                spellCategory = Spell.SpellCategory;
+                break;
+            }
+        }
+    }
+
+    if (m_cooldownMap.FindBySpellId(spellEntry.Id) != m_cooldownMap.end())
+        return false;
+
+    if (spellCategory && m_cooldownMap.FindByCategory(spellCategory) != m_cooldownMap.end())
+        return false;
+
+    if (spellEntry.PreventionType == SPELL_PREVENTION_TYPE_SILENCE && CheckLockout(spellEntry.GetSpellSchoolMask()))
+        return false;
+
+    return true;
+}
+
+bool WorldObject::IsSpellReady(uint32 spellId, ItemPrototype const* itemProto /*= nullptr*/) const
+{
+    SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spellId);
+    if (!spellEntry)
+        return false;
+
+    return IsSpellReady(*spellEntry, itemProto);
+}
+
+void WorldObject::LockOutSpells(SpellSchoolMask schoolMask, uint32 duration)
+{
+    for (uint32 i = 0; i < MAX_SPELL_SCHOOL; ++i)
+    {
+        if (schoolMask & (1 << i))
+            m_lockoutMap.emplace(SpellSchools(i), std::chrono::milliseconds(duration) + sWorld.GetCurrentClockTime());
+    }
+}
+
+void WorldObject::RemoveSpellCooldown(uint32 spellId, bool updateClient /*= true*/)
+{
+    SpellEntry const* spellEntry = sSpellMgr.GetSpellEntry(spellId);
+    if (!spellEntry)
+        return;
+
+    RemoveSpellCooldown(*spellEntry, updateClient);
+}
+
+void WorldObject::RemoveSpellCooldown(SpellEntry const& spellEntry, bool /*updateClient = true*/)
+{
+    m_cooldownMap.RemoveBySpellId(spellEntry.Id);
+}
+
+void WorldObject::RemoveSpellCategoryCooldown(uint32 category, bool /*updateClient = true*/)
+{
+    m_cooldownMap.RemoveByCategory(category);
+}
+
+void WorldObject::ResetGCD(SpellEntry const* spellEntry /*= nullptr*/)
+{
+    if (!spellEntry)
+    {
+        m_GCDCatMap.clear();
+        return;
+    }
+
+    auto gcdItr = m_GCDCatMap.find(spellEntry->StartRecoveryCategory);
+    if (gcdItr != m_GCDCatMap.end())
+        m_GCDCatMap.erase(gcdItr);
+}
+
+void ConvertMillisecondToStr(std::chrono::milliseconds& duration, std::stringstream& durationStr)
+{
+    std::chrono::minutes mm = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1));
+    std::chrono::seconds ss = std::chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1));
+    std::chrono::milliseconds msec = std::chrono::duration_cast<std::chrono::milliseconds>(duration % std::chrono::seconds(1));
+    durationStr << mm.count() << "m " << ss.count() << "s " << msec.count() << "ms";
+}
+
+void WorldObject::PrintCooldownList(ChatHandler& chat) const
+{
+    // print gcd
+    auto now = sWorld.GetCurrentClockTime();
+    uint32 cdCount = 0;
+    uint32 permCDCount = 0;
+
+    for (auto& cdItr : m_GCDCatMap)
+    {
+        auto& cdData = cdItr.second;
+        std::stringstream cdLine;
+        std::stringstream durationStr;
+        if (cdData > now)
+        {
+            auto cdDuration = cdData - now;
+            ConvertMillisecondToStr(cdDuration, durationStr);
+            ++cdCount;
+        }
+        else
+            continue;
+
+        cdLine << "GCD category" << "(" << cdItr.first << ") have " << durationStr.str() << " cd";
+        chat.PSendSysMessage("%s", cdLine.str().c_str());
+    }
+
+    // print spell and category cd
+    for (auto& cdItr : m_cooldownMap)
+    {
+        auto& cdData = cdItr.second;
+        std::stringstream cdLine;
+        std::stringstream durationStr("permanent");
+        std::stringstream spellStr;
+        std::stringstream catStr;
+        if (cdData->IsPermanent())
+            ++permCDCount;
+        else
+        {
+            TimePoint spellExpireTime;
+            TimePoint catExpireTime;
+            bool foundSpellCD = cdData->GetSpellCDExpireTime(spellExpireTime);
+            bool foundcatCD = cdData->GetCatCDExpireTime(catExpireTime);
+
+            if (foundSpellCD && spellExpireTime > now)
+            {
+                auto cdDuration = std::chrono::duration_cast<std::chrono::milliseconds>(spellExpireTime - now);
+                spellStr << "RecTime(";
+                ConvertMillisecondToStr(cdDuration, spellStr);
+                spellStr << ")";
+            }
+
+            if (foundcatCD && catExpireTime > now)
+            {
+                auto cdDuration = std::chrono::duration_cast<std::chrono::milliseconds>(catExpireTime - now);
+                if (foundSpellCD)
+                    catStr << ", ";
+                catStr << "CatRecTime(";
+                ConvertMillisecondToStr(cdDuration, catStr);
+                catStr << ")";
+            }
+
+            if (!foundSpellCD && !foundcatCD)
+                continue;
+
+            durationStr << spellStr.str() << catStr.str();
+            ++cdCount;
+        }
+
+        cdLine << "Spell" << "(" << cdItr.first << ") have " << durationStr.str() << " cd";
+        chat.PSendSysMessage("%s", cdLine.str().c_str());
+    }
+
+    // print spell lockout
+    static std::string schoolName[] = { "SPELL_SCHOOL_NORMAL", "SPELL_SCHOOL_HOLY", "SPELL_SCHOOL_FIRE", "SPELL_SCHOOL_NATURE", "SPELL_SCHOOL_FROST", "SPELL_SCHOOL_SHADOW", "SPELL_SCHOOL_ARCANE" };
+
+    for (auto& lockoutItr : m_lockoutMap)
+    {
+        std::stringstream cdLine;
+        std::stringstream durationStr;
+        auto& cdData = lockoutItr.second;
+        if (cdData > now)
+        {
+            auto cdDuration = std::chrono::duration_cast<std::chrono::milliseconds>(cdData - now);
+            ConvertMillisecondToStr(cdDuration, durationStr);
+            ++cdCount;
+        }
+        else
+            continue;
+        cdLine << "LOCKOUT for " << schoolName[lockoutItr.first] << " with " << durationStr.str() << " remaining time cd";
+        chat.PSendSysMessage("%s", cdLine.str().c_str());
+    }
+
+    chat.PSendSysMessage("Found %u cooldown%s.", cdCount, (cdCount > 1) ? "s" : "");
+    chat.PSendSysMessage("Found %u permanent cooldown%s.", permCDCount, (permCDCount > 1) ? "s" : "");
 }
