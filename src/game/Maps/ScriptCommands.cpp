@@ -402,16 +402,7 @@ bool Map::ScriptCommand_SummonCreature(ScriptInfo const& script, WorldObject* so
         if (Unit* pAttackTarget = ToUnit(GetTargetByType(pSummoner, ToUnit(target), script.summonCreature.attackTarget)))
         {
             if (pCreature->AI())
-            {
-                // Hack: there is a visual bug where the melee animation
-                // does not play for summoned units if they enter combat
-                // immediately and their target is within melee range.
-                // Sending the packet a second time fixes the animation.
-                if (pCreature->AI()->IsMeleeAttackEnabled())
-                    pCreature->SendMeleeAttackStart(pAttackTarget);
-
                 pCreature->AI()->AttackStart(pAttackTarget);
-            }
         }
     }
 
@@ -704,7 +695,7 @@ bool Map::ScriptCommand_SetMovementType(ScriptInfo const& script, WorldObject* s
         case WAYPOINT_MOTION_TYPE:
             if (script.movement.clear)
                 pSource->GetMotionMaster()->Clear(false, true);
-            pSource->GetMotionMaster()->MoveWaypoint(0, script.movement.intParam, 0, 0, 0, script.movement.boolParam);
+            pSource->GetMotionMaster()->MoveWaypoint(script.movement.intParam, 0, 0, 0, 0, script.movement.boolParam);
             break;
         case CONFUSED_MOTION_TYPE:
             pSource->GetMotionMaster()->MoveConfused();
@@ -1679,7 +1670,7 @@ bool Map::ScriptCommand_StartWaypoints(ScriptInfo const& script, WorldObject* so
         return ShouldAbortScript(script);
 
     pSource->GetMotionMaster()->Clear(false, true);
-    pSource->GetMotionMaster()->MoveWaypoint(script.startWaypoints.pathId, script.startWaypoints.startPoint, script.startWaypoints.wpSource, script.startWaypoints.initialDelay, script.startWaypoints.overwriteEntry, script.startWaypoints.canRepeat);
+    pSource->GetMotionMaster()->MoveWaypoint(script.startWaypoints.startPoint, script.startWaypoints.wpSource, script.startWaypoints.initialDelay, 0, script.startWaypoints.overwriteEntry, script.startWaypoints.canRepeat);
 
     return false;
 }
