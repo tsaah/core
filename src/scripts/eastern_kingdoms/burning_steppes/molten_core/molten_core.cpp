@@ -228,7 +228,7 @@ struct mob_ancient_core_houndAI : public ScriptedAI
 
         if (m_uiBiteTimer < uiDiff)
         {
-            if (m_creature->IsWithinMeleeRange(m_creature->GetVictim()))
+            if (m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
             {
                 m_creature->CastSpell(m_creature->GetVictim(), SPELL_BITE, false);
                 m_uiBiteTimer = 6000;
@@ -239,7 +239,7 @@ struct mob_ancient_core_houndAI : public ScriptedAI
         if (m_creature->IsAttackReady())
         {
             //If we are within range melee the target
-            if (m_creature->IsWithinMeleeRange(m_creature->GetVictim()))
+            if (m_creature->CanReachWithMeleeAutoAttack(m_creature->GetVictim()))
             {
                 m_creature->CastSpell(m_creature->GetVictim(), SPELL_VICIOUS_BITE, true);
                 m_creature->ResetAttackTimer();
@@ -560,10 +560,10 @@ void AddSC_molten_core()
     newscript = new Script;
     newscript->Name = "mob_lava_surger";
     newscript->GetAI = &GetAI_mob_lava_surger;
-	newscript->RegisterSelf();
+    newscript->RegisterSelf();
 
     newscript = new Script;
     newscript->Name = "mob_firelord";
-	newscript->GetAI = &GetAI_mob_firelord;
+    newscript->GetAI = &GetAI_mob_firelord;
     newscript->RegisterSelf();
 }

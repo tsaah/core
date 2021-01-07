@@ -255,7 +255,7 @@ enum eScriptCommand
                                                             // datalong2 = start_point
                                                             // datalong3 = initial_delay
                                                             // datalong4 = (bool) repeat
-                                                            // dataint = unused
+                                                            // dataint = overwrite_guid
                                                             // dataint2 = overwrite_entry
     SCRIPT_COMMAND_START_MAP_EVENT          = 61,           // source = Map
                                                             // datalong = event_id
@@ -342,6 +342,8 @@ enum eScriptCommand
                                                             // target = WorldObject
                                                             // datalong = event_id
                                                             // datalong2 = event_data
+    SCRIPT_COMMAND_SET_PVP                  = 86,           // source = Player
+                                                            // datalong = (bool) 0 = off, 1 = on
     SCRIPT_COMMAND_MAX,
 
     SCRIPT_COMMAND_DISABLED                 = 9999          // Script action was disabled during loading.
@@ -363,6 +365,7 @@ enum eMoveToCoordinateTypes
     SO_MOVETO_COORDINATES_NORMAL               = 0,
     SO_MOVETO_COORDINATES_RELATIVE_TO_TARGET   = 1,            // Coordinates are added to that of target.
     SO_MOVETO_COORDINATES_DISTANCE_FROM_TARGET = 2,            // X is distance from target, others not used.
+    SO_MOVETO_COORDINATES_RANDOM_POINT         = 3,            // O is max distance from coordinates
 
     MOVETO_COORDINATES_MAX
 };
@@ -874,7 +877,7 @@ struct ScriptInfo
             uint32 initialDelay;                            // datalong3
             uint32 canRepeat;                               // datalong4
             uint32 unused;                                  // data_flags
-            int32  unused2;                                // dataint
+            int32  overwriteGuid;                           // dataint
             int32  overwriteEntry;                          // dataint2
         } startWaypoints;
         
@@ -1029,6 +1032,11 @@ struct ScriptInfo
             uint32 eventData;                               // datalong2
         } sendScriptEvent;
 
+        struct                                              // SCRIPT_COMMAND_SET_PVP (86)
+        {
+            uint32 enabled;                                 // datalong
+        } setPvP;
+
         struct
         {
             uint32 data[9];
@@ -1106,17 +1114,18 @@ extern ScriptMapMap sCreatureAIScripts;
 
 enum CastFlags
 {
-    CF_INTERRUPT_PREVIOUS     = 0x01,                     //Interrupt any spell casting
-    CF_TRIGGERED              = 0x02,                     //Triggered (this makes spell cost zero mana and have no cast time)
-    CF_FORCE_CAST             = 0x04,                     //Forces cast even if creature is out of mana or out of range
-    CF_MAIN_RANGED_SPELL      = 0x08,                     //To be used by ranged mobs only. Creature will not chase target until cast fails.
-    CF_TARGET_UNREACHABLE     = 0x10,                     //Will only use the ability if creature cannot currently get to target
-    CF_AURA_NOT_PRESENT       = 0x20,                     //Only casts the spell if the target does not have an aura from the spell
-    CF_ONLY_IN_MELEE          = 0x40,                     //Only casts if the creature is in melee range of the target
-    CF_NOT_IN_MELEE           = 0x80,                     //Only casts if the creature is not in melee range of the target
+    CF_INTERRUPT_PREVIOUS     = 0x001,                     // Interrupt any spell casting
+    CF_TRIGGERED              = 0x002,                     // Triggered (this makes spell cost zero mana and have no cast time)
+    CF_FORCE_CAST             = 0x004,                     // Bypasses extra checks in Creature::TryToCast
+    CF_MAIN_RANGED_SPELL      = 0x008,                     // To be used by ranged mobs only. Creature will not chase target until cast fails.
+    CF_TARGET_UNREACHABLE     = 0x010,                     // Will only use the ability if creature cannot currently get to target
+    CF_AURA_NOT_PRESENT       = 0x020,                     // Only casts the spell if the target does not have an aura from the spell
+    CF_ONLY_IN_MELEE          = 0x040,                     // Only casts if the creature is in melee range of the target
+    CF_NOT_IN_MELEE           = 0x080,                     // Only casts if the creature is not in melee range of the target
+    CF_TARGET_CASTING         = 0x100,                     // Only casts if the target is currently casting a spell
 };
 
-#define ALL_CAST_FLAGS (CF_INTERRUPT_PREVIOUS | CF_TRIGGERED | CF_FORCE_CAST | CF_MAIN_RANGED_SPELL | CF_TARGET_UNREACHABLE | CF_AURA_NOT_PRESENT)
+#define ALL_CAST_FLAGS (CF_INTERRUPT_PREVIOUS | CF_TRIGGERED | CF_FORCE_CAST | CF_MAIN_RANGED_SPELL | CF_TARGET_UNREACHABLE | CF_AURA_NOT_PRESENT | CF_ONLY_IN_MELEE | CF_NOT_IN_MELEE | CF_TARGET_CASTING)
 
 // Values used in target_type column
 enum ScriptTarget

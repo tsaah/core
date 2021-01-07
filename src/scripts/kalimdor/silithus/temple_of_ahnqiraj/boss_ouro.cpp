@@ -237,7 +237,7 @@ struct boss_ouroAI : public Scripted_NoMovementAI
         // at first we check for the current player-type target
         Unit* pMainTarget = m_creature->GetVictim();
         if (pMainTarget->GetTypeId() == TYPEID_PLAYER && !pMainTarget->ToPlayer()->IsGameMaster() &&
-            m_creature->IsWithinMeleeRange(pMainTarget) && m_creature->IsWithinLOSInMap(pMainTarget))
+            m_creature->CanReachWithMeleeAutoAttack(pMainTarget) && m_creature->IsWithinLOSInMap(pMainTarget))
         {
             return true;
         }
@@ -507,8 +507,8 @@ struct npc_dirt_moundAI : public ScriptedAI
     void Reset() override
     {
         m_uiDespawnTimer = 30000;
-	    m_TargetGUID.Clear();
-	    m_CurrentTargetGUID.Clear();
+        m_TargetGUID.Clear();
+        m_CurrentTargetGUID.Clear();
 
         DoCastSpellIfCan(m_creature, SPELL_DIRTMOUND_PASSIVE);
     }
@@ -517,8 +517,8 @@ struct npc_dirt_moundAI : public ScriptedAI
     {
         if (!m_TargetGUID && who->GetTypeId() == TYPEID_PLAYER)
         {
-  	        m_TargetGUID = who->GetGUID();
-	    }
+            m_TargetGUID = who->GetGUID();
+        }
     }
 
     void UpdateAI(uint32 const uiDiff) override
@@ -577,9 +577,9 @@ struct npc_ouro_scarabAI : public ScriptedAI
     void MoveInLineOfSight(Unit *who) override
     {
         if (who->GetTypeId() == TYPEID_PLAYER && !m_creature->GetVictim() && !urand(0, 5))
-	    {
+        {
             AttackStart(who);
-	    }
+        }
     }
 
     void UpdateAI(uint32 const uiDiff) override

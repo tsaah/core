@@ -124,34 +124,44 @@ bool Map::ScriptCommand_MoveTo(ScriptInfo const& script, WorldObject* source, Wo
     float y = script.y;
     float z = script.z;
 
-    if (script.moveTo.coordinatesType)
+    switch (script.moveTo.coordinatesType)
     {
-        if (WorldObject* pTarget = target)
+        case SO_MOVETO_COORDINATES_RELATIVE_TO_TARGET:
         {
-            switch (script.moveTo.coordinatesType)
+            if (WorldObject* pTarget = target)
             {
-                case SO_MOVETO_COORDINATES_RELATIVE_TO_TARGET:
-                {
-                    // Coordinates are added to those of the target.
-                    x += pTarget->GetPositionX();
-                    y += pTarget->GetPositionY();
-                    z += pTarget->GetPositionZ();
-                    break;
-                }
-                case SO_MOVETO_COORDINATES_DISTANCE_FROM_TARGET:
-                {
-                    // X is distance from the target.
-                    float distance = x;
-                    float angle = script.o < 0.0f ? pTarget->GetAngle(pSource) : frand(0, 2 * M_PI_F);
-                    pTarget->GetNearPoint(pSource, x, y, z, 0, distance, angle);
-                    break;
-                }
+                // Coordinates are added to those of the target.
+                x += pTarget->GetPositionX();
+                y += pTarget->GetPositionY();
+                z += pTarget->GetPositionZ();
             }
+            else
+            {
+                sLog.outError("SCRIPT_COMMAND_MOVE_TO (script id %u) call with datalong = %u for a nullptr or non-worldobject target, skipping.", script.id, script.moveTo.coordinatesType);
+                return ShouldAbortScript(script);
+            }
+            break;
         }
-        else
+        case SO_MOVETO_COORDINATES_DISTANCE_FROM_TARGET:
         {
-            sLog.outError("SCRIPT_COMMAND_MOVE_TO (script id %u) call with datalong = %u for a nullptr or non-worldobject target, skipping.", script.id, script.moveTo.coordinatesType);
-            return ShouldAbortScript(script);
+            if (WorldObject* pTarget = target)
+            {
+                // X is distance from the target.
+                float distance = x;
+                float angle = script.o < 0.0f ? pTarget->GetAngle(pSource) : frand(0, 2 * M_PI_F);
+                pTarget->GetNearPoint(pSource, x, y, z, 0, distance, angle);
+            }
+            else
+            {
+                sLog.outError("SCRIPT_COMMAND_MOVE_TO (script id %u) call with datalong = %u for a nullptr or non-worldobject target, skipping.", script.id, script.moveTo.coordinatesType);
+                return ShouldAbortScript(script);
+            }
+            break;
+        }
+        case SO_MOVETO_COORDINATES_RANDOM_POINT:
+        {
+            pSource->GetRandomPoint(x, y, z, script.o, x, y, z);
+            break;
         }
     }
 
@@ -161,6 +171,10 @@ bool Map::ScriptCommand_MoveTo(ScriptInfo const& script, WorldObject* source, Wo
 
     float speed = script.moveTo.travelTime != 0 ? pSource->GetDistance(x, y, z) / ((float)script.moveTo.travelTime * 0.001f) : 0.0f;
     float orientation = script.o > 0.0f ? script.o : -10.0f;
+
+    // o is distance in this case
+    if (script.moveTo.coordinatesType == SO_MOVETO_COORDINATES_RANDOM_POINT)
+        orientation = -10.0f;
 
     if (script.moveTo.flags & SF_MOVETO_POINT_MOVEGEN)
         pSource->GetMotionMaster()->MovePoint(script.moveTo.pointId, x, y, z, script.moveTo.movementOptions, speed, orientation);
@@ -1670,7 +1684,7 @@ bool Map::ScriptCommand_StartWaypoints(ScriptInfo const& script, WorldObject* so
         return ShouldAbortScript(script);
 
     pSource->GetMotionMaster()->Clear(false, true);
-    pSource->GetMotionMaster()->MoveWaypoint(script.startWaypoints.startPoint, script.startWaypoints.wpSource, script.startWaypoints.initialDelay, 0, script.startWaypoints.overwriteEntry, script.startWaypoints.canRepeat);
+    pSource->GetMotionMaster()->MoveWaypoint(script.startWaypoints.startPoint, script.startWaypoints.wpSource, script.startWaypoints.initialDelay, script.startWaypoints.overwriteGuid, script.startWaypoints.overwriteEntry, script.startWaypoints.canRepeat);
 
     return false;
 }
@@ -2304,6 +2318,24 @@ bool Map::ScriptCommand_SendScriptEvent(ScriptInfo const& script, WorldObject* s
         pSource->AI()->OnScriptEventHappened(script.sendScriptEvent.eventId, script.sendScriptEvent.eventData, target);
     else
         return ShouldAbortScript(script);
+
+    return false;
+}
+
+// SCRIPT_COMMAND_SET_PVP (86)
+bool Map::ScriptCommand_SetPvP(ScriptInfo const& script, WorldObject* source, WorldObject* target)
+{
+    Player* pSource;
+
+    if (!((pSource = ToPlayer(target)) || (pSource = ToPlayer(source))))
+    {
+        sLog.outError("SCRIPT_COMMAND_SET_PVP (script id %u) call for a nullptr or non-player object (TypeIdSource: %u)(TypeIdTarget: %u), skipping.", script.id, source ? source->GetTypeId() : 0, target ? target->GetTypeId() : 0);
+        return ShouldAbortScript(script);
+    }
+
+    pSource->UpdatePvP(script.setPvP.enabled);
+    if (script.setPvP.enabled)
+        pSource->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_PVP_COMBAT);
 
     return false;
 }

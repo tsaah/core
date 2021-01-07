@@ -6467,7 +6467,7 @@ bool Unit::IsMovedByPlayer() const
         if (pPossessor->GetCharmGuid() == GetObjectGuid())
             return true;
 
-    return IsPlayer() && !static_cast<Player const*>(this)->GetSession()->GetBot();
+    return IsPlayer() && !static_cast<Player const*>(this)->IsBot();
 }
 
 PlayerMovementPendingChange::PlayerMovementPendingChange()
@@ -9427,24 +9427,6 @@ uint32 Unit::RespawnNearCreaturesByEntry(uint32 entry, float range)
         }
     }
     return count;
-}
-
-bool Unit::IsWithinMeleeRange(Unit const* obj, float dist) const
-{
-    if (!obj || !IsInMap(obj))
-        return false;
-
-    float dx = GetPositionX() - obj->GetPositionX();
-    float dy = GetPositionY() - obj->GetPositionY();
-    float dz = GetPositionZ() - obj->GetPositionZ();
-    float distsq = dx * dx + dy * dy + dz * dz;
-
-    float maxdist = dist + BASE_MELEERANGE_OFFSET + GetMeleeReach() + obj->GetObjectBoundingRadius();
-
-    if (maxdist < ATTACK_DISTANCE)
-        maxdist = ATTACK_DISTANCE;
-
-    return distsq < maxdist * maxdist;
 }
 
 // TriniyCore

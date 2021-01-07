@@ -125,7 +125,7 @@ public:
             }
 
             // skip bots
-            if (!showBotsInWhoList && pPlayer->GetSession()->GetBot())
+            if (!showBotsInWhoList && pPlayer->IsBot())
                 continue;
 
             // do not process players which are not in world
@@ -1171,7 +1171,7 @@ void WorldSession::HandleWhoisOpcode(WorldPacket& recv_data)
 
     uint32 accid = plr->GetSession()->GetAccountId();
 
-    QueryResult* result = LoginDatabase.PQuery("SELECT username,email,last_ip FROM account WHERE id=%u", accid);
+    QueryResult* result = LoginDatabase.PQuery("SELECT `username`, `email`, `last_ip` FROM `account` WHERE `id`=%u", accid);
     if (!result)
     {
         SendNotification(LANG_ACCOUNT_FOR_PLAYER_NOT_FOUND, charname.c_str());

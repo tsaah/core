@@ -5599,7 +5599,7 @@ SpellCastResult Spell::CheckCast(bool strict)
                         return SPELL_FAILED_LOWLEVEL;
                 }
 
-                if (m_spellInfo->SpellFamilyName == SPELLFAMILY_MAGE && m_spellInfo->IsFitToFamilyMask<CF_MAGE_POLYMORPH>())
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_CANT_TARGET_TAPPED))
                 {
                     // Mob tapped by another player or group.
                     if (Player* pCaster = m_caster->ToPlayer())
@@ -6178,7 +6178,7 @@ SpellCastResult Spell::CheckCast(bool strict)
                 }
 
                 if (plrCaster->GetPetGuid() || plrCaster->GetCharmGuid() ||
-                   (!plrCaster->GetSession()->GetBot() &&
+                   (!plrCaster->IsBot() &&
                     sCharacterDatabaseCache.GetCharacterPetByOwner(plrCaster->GetGUIDLow())))
                 {
                     plrCaster->SendPetTameFailure(PETTAME_ANOTHERSUMMONACTIVE);
@@ -6396,6 +6396,10 @@ SpellCastResult Spell::CheckCast(bool strict)
 
                     if (!go->IsUseRequirementMet())
                         return SPELL_FAILED_TRY_AGAIN;
+
+                    // check if its in use only when cast is finished (called from spell::cast() with strict = false)
+                    if (!strict && go->GetGoType() == GAMEOBJECT_TYPE_CHEST && go->loot.HasPlayersLooting())
+                        return SPELL_FAILED_CHEST_IN_USE;
 
                     if (!strict && go->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE))
                         return SPELL_FAILED_CHEST_IN_USE;
@@ -6793,12 +6797,6 @@ SpellCastResult Spell::CheckCast(bool strict)
                 if (int32(m_targets.getUnitTarget()->GetLevel()) > CalculateDamage(SpellEffectIndex(i), m_targets.getUnitTarget()))
                     return SPELL_FAILED_HIGHLEVEL;
 
-                // Mob tapped by another player or group.
-                if (Player* pCaster = m_caster->ToPlayer())
-                    if (Creature* pCreature = m_targets.getUnitTarget()->ToCreature())
-                        if (pCreature->GetLootGroupRecipientId() || pCreature->GetLootRecipientGuid())
-                            if (!pCreature->IsTappedBy(pCaster))
-                                return SPELL_FAILED_CANT_CAST_ON_TAPPED;
                 break;
             }
             case SPELL_AURA_MOD_POSSESS_PET:
@@ -7695,22 +7693,22 @@ SpellCastResult Spell::CheckItems()
         {
             case SPELL_EFFECT_CREATE_ITEM:
             {
-                if (!m_IsTriggeredSpell && m_spellInfo->EffectItemType[i])
+                if (Unit* target = m_targets.getUnitTarget())
                 {
+                    if (!target->IsPlayer())
+                        return SPELL_FAILED_BAD_TARGETS;
+
+                    uint32 count = CalculateDamage(SpellEffectIndex(i), target);
                     ItemPosCountVec dest;
-                    Unit* createItemTarget = p_caster;
-                    if (m_spellInfo->Id == 24726)
-                        createItemTarget = m_targets.getUnitTarget();
-                    // Quelle idee d'ajouter un item a un mob ...
-                    if (createItemTarget->GetTypeId() != TYPEID_PLAYER)
-                        return SPELL_FAILED_DONT_REPORT;
-                    InventoryResult msg = createItemTarget->ToPlayer()->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, m_spellInfo->EffectItemType[i], 1);
+                    uint32 no_space = 0;
+                    InventoryResult msg = static_cast<Player*>(target)->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, m_spellInfo->EffectItemType[i], count, &no_space);
                     if (msg != EQUIP_ERR_OK)
                     {
-                        createItemTarget->ToPlayer() ->SendEquipError(msg, nullptr, nullptr, m_spellInfo->EffectItemType[i]);
+                        static_cast<Player*>(target)->SendEquipError(msg, nullptr, nullptr, m_spellInfo->EffectItemType[i]);
                         return SPELL_FAILED_DONT_REPORT;
                     }
                 }
+
                 break;
             }
             case SPELL_EFFECT_ENCHANT_ITEM:
