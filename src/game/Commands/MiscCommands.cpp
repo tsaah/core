@@ -16,15 +16,14 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
+#include "Opcodes.h"
 #include "World.h"
 #include "Player.h"
-#include "Opcodes.h"
+#include "Group.h"
 #include "Chat.h"
 #include "ObjectAccessor.h"
 #include "Language.h"
 #include "ObjectMgr.h"
-#include "SystemConfig.h"
-#include "revision.h"
 #include "Util.h"
 #include "Guild.h"
 #include "GuildMgr.h"
@@ -297,7 +296,7 @@ bool RegisterPlayerToBG(WorldSession* sess, BattleGroundTypeId bgid)
     if (!pPlayer->GetBGAccessByLevel(bgid))
         return false;
     pPlayer->SetBattleGroundEntryPoint(pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation());
-    sess->SendBattlegGroundList(pPlayer->GetObjectGuid(), bgid);
+    sess->SendBattleGroundList(pPlayer->GetObjectGuid(), bgid);
     return true;
 }
 

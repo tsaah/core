@@ -24,7 +24,14 @@
 #include "Creature.h"
 #include "DBCStores.h"
 #include "Totem.h"
-#include "GridSearchers.h"
+#include "ObjectMgr.h"
+#include "ScriptMgr.h"
+#include "Group.h"
+
+CreatureAI::CreatureAI(Creature* creature) : m_creature(creature), m_bUseAiAtControl(false), m_bMeleeAttack(true), m_bCombatMovement(true), m_uiCastingDelay(0), m_uLastAlertTime(0)
+{
+    SetSpellsList(creature->GetCreatureInfo()->spell_list_id);
+}
 
 CreatureAI::~CreatureAI()
 {
@@ -68,7 +75,7 @@ CanCastResult CreatureAI::CanCastSpell(Unit* pTarget, SpellEntry const* pSpell, 
             return CAST_FAIL_POWER;
     }
 
-    if (pSpell->Custom & SPELL_CUSTOM_BEHIND_TARGET && pTarget->HasInArc(M_PI_F, m_creature))
+    if (pSpell->Custom & SPELL_CUSTOM_BEHIND_TARGET && pTarget->HasInArc(m_creature))
         return CAST_FAIL_OTHER;
 
     // If the spell requires the target having a specific power type
@@ -220,7 +227,7 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
             // Checked on startup.
             SpellEntry const* pSpellInfo = sSpellMgr.GetSpellEntry(spell.spellId);
 
-            Unit* pTarget = ToUnit(GetTargetByType(m_creature, m_creature, spell.castTarget, spell.targetParam1 ? spell.targetParam1 : sSpellRangeStore.LookupEntry(pSpellInfo->rangeIndex)->maxRange, spell.targetParam2));
+            Unit* pTarget = ToUnit(GetTargetByType(m_creature, m_creature, m_creature->GetMap(), spell.castTarget, spell.targetParam1, spell.targetParam2, pSpellInfo));
 
             SpellCastResult result = m_creature->TryToCast(pTarget, pSpellInfo, spell.castFlags, spell.probability);
             
@@ -242,7 +249,7 @@ void CreatureAI::DoSpellsListCasts(uint32 const uiDiff)
 
                     // If there is a script for this spell, run it.
                     if (spell.scriptId)
-                        m_creature->GetMap()->ScriptsStart(sCreatureSpellScripts, spell.scriptId, m_creature, pTarget);
+                        m_creature->GetMap()->ScriptsStart(sCreatureSpellScripts, spell.scriptId, m_creature->GetObjectGuid(), pTarget->GetObjectGuid());
                     break;
                 }
                 case SPELL_FAILED_FLEEING:
@@ -488,6 +495,10 @@ void CreatureAI::TriggerAlert(Unit const* who)
 
     // 10 sec cooldown for stealth warning
     if (WorldTimer::getMSTimeDiffToNow(m_uLastAlertTime) < 10000)
+        return;
+
+    // only alert if target is within line of sight
+    if (!m_creature->IsWithinLOSInMap(who))
         return;
 
     // Send alert sound (if any) for this creature

@@ -243,6 +243,18 @@ namespace Spells
         return false;
     }
 
+    inline bool IsIgnoreLosTarget(uint32 target)
+    {
+        switch (target)
+        {
+            case TARGET_UNIT_FRIEND_AND_PARTY:
+            case TARGET_UNIT_RAID_AND_CLASS:
+                return true;
+        }
+
+        return false;
+    }
+
     bool IsSingleTargetSpells(SpellEntry const* spellInfo1, SpellEntry const* spellInfo2);
 
     inline bool IsCasterSourceTarget(uint32 target)
@@ -618,6 +630,44 @@ class SpellEntry
             }
         }
 
+        // Effects whose execution will be delayed if Spell.EffectDelay config setting is non-zero.
+        inline bool IsDelayableEffect(uint32 effecIdx) const
+        {
+            switch (Effect[effecIdx])
+            {
+                case SPELL_EFFECT_SCHOOL_DAMAGE:
+                case SPELL_EFFECT_HEALTH_LEECH:
+                case SPELL_EFFECT_HEAL:
+                case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+                case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+                case SPELL_EFFECT_WEAPON_DAMAGE:
+                case SPELL_EFFECT_HEAL_MAX_HEALTH:
+                case SPELL_EFFECT_HEAL_MECHANICAL:
+                case SPELL_EFFECT_ATTACK_ME:
+                case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+                    return true;
+                case SPELL_EFFECT_APPLY_AURA:
+                {
+                    switch (EffectApplyAuraName[effecIdx])
+                    {
+                        case SPELL_AURA_MOD_CONFUSE:
+                        case SPELL_AURA_MOD_FEAR:
+                        case SPELL_AURA_MOD_TAUNT:
+                        case SPELL_AURA_MOD_STUN:
+                        case SPELL_AURA_MOD_PACIFY:
+                        case SPELL_AURA_MOD_ROOT:
+                        case SPELL_AURA_MOD_DECREASE_SPEED:
+                        case SPELL_AURA_SCHOOL_IMMUNITY:
+                        case SPELL_AURA_MOD_HEALING_PCT:
+                            return true;
+                    }
+                    break;
+                }
+            }
+
+            return false;
+        }
+
         inline bool IsPeriodicRegenerateEffect(SpellEffectIndex effecIdx) const
         {
             switch (AuraType(EffectApplyAuraName[effecIdx]))
@@ -648,6 +698,26 @@ class SpellEntry
                 else if (Effect[i] == SPELL_EFFECT_APPLY_AURA)
                     return false;
             return hasAura;
+        }
+
+        bool IsCustomSpell() const
+        {
+            return Internal & SPELL_INTERNAL_CUSTOM;
+        }
+
+        bool IsSpellWithDelayableEffects() const
+        {
+            return Internal & SPELL_INTERNAL_DELAYABLE_EFFECTS;
+        }
+
+        bool IsNextMeleeSwingSpell() const
+        {
+            return Attributes & (SPELL_ATTR_ON_NEXT_SWING_1 | SPELL_ATTR_ON_NEXT_SWING_2);
+        }
+
+        bool IsRangedSpell() const
+        {
+            return Attributes & SPELL_ATTR_RANGED;
         }
 
         inline bool IsSealSpell() const
@@ -681,6 +751,19 @@ class SpellEntry
         inline bool IsDeathOnlySpell() const
         {
             return (AttributesEx3 & SPELL_ATTR_EX3_CAST_ON_DEAD) || (Id == 2584);
+        }
+
+        inline bool CanTargetDeadTarget() const
+        {
+            return HasAttribute(SPELL_ATTR_EX3_CAST_ON_DEAD) || HasAttribute(SPELL_ATTR_EX2_CAN_TARGET_DEAD);
+        }
+
+        inline bool CanTargetAliveState(bool alive) const
+        {
+            if (HasAttribute(SPELL_ATTR_EX3_CAST_ON_DEAD))
+                return !alive;
+
+            return alive || HasAttribute(SPELL_ATTR_EX2_CAN_TARGET_DEAD);
         }
 
         inline bool IsDeathPersistentSpell() const
@@ -893,6 +976,7 @@ class SpellEntry
         float CalculateDefaultCoefficient(DamageEffectType const damagetype) const;
         float CalculateCustomCoefficient(WorldObject const* caster, DamageEffectType const damageType, float coeff, Spell* spell, bool donePart) const;
         SpellCastResult GetErrorAtShapeshiftedCast(uint32 form) const;
+        bool IsTargetInRange(WorldObject const* pCaster, WorldObject const* pTarget) const; // to be used in scripts for simple pre-cast range checks
         uint32 GetMechanic() const { return Mechanic; }
         uint32 GetManaCost() const { return manaCost; }
         uint32 GetSpellFamilyName() const { return SpellFamilyName; }

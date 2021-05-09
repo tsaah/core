@@ -30,7 +30,7 @@
 #include "CreatureAI.h"
 #include "Util.h"
 #include "Pet.h"
-#include "World.h"
+#include "Group.h"
 
 void WorldSession::HandlePetAction(WorldPacket& recv_data)
 {
@@ -231,6 +231,7 @@ void WorldSession::HandlePetAction(WorldPacket& recv_data)
             if (!pCharmedUnit->IsSpellReady(*spellInfo))
                 return;
 
+            // Why is this here?
             for (uint32 i : spellInfo->EffectImplicitTargetA)
             {
                 if (i == TARGET_ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC || i == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC || i == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC)

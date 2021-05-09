@@ -168,7 +168,7 @@ struct boss_four_horsemen_shared : public ScriptedAI
             if (!pPlayer->IsVisibleForOrDetect(m_creature, m_creature, true, false, &alert))
                 return;
 
-            if (m_creature->CanInitiateAttack() && pPlayer->IsTargetableForAttack() && m_creature->IsHostileTo(pPlayer))
+            if (m_creature->CanInitiateAttack() && pPlayer->IsTargetable(true, false) && m_creature->IsHostileTo(pPlayer))
             {
                 if (pPlayer->IsInAccessablePlaceFor(m_creature) && m_creature->IsWithinLOSInMap(pPlayer))
                 {
@@ -197,7 +197,7 @@ struct boss_four_horsemen_shared : public ScriptedAI
         if (!m_creature->IsWithinDistInMap(pWho, 75.0f))
             return;
 
-        if (m_creature->CanInitiateAttack() && pWho->IsTargetableForAttack() && m_creature->IsHostileTo(pWho))
+        if (m_creature->CanInitiateAttack() && pWho->IsTargetable(true, false) && m_creature->IsHostileTo(pWho))
         {
             if (pWho->IsInAccessablePlaceFor(m_creature) && m_creature->IsWithinLOSInMap(pWho))
             {
@@ -329,7 +329,7 @@ struct boss_four_horsemen_shared : public ScriptedAI
                     break;
             }
 
-            m_creature->CastCustomSpell(pTarget, SPELL_MARK, &damage, nullptr, nullptr, true, nullptr, holder->GetAuraByEffectIndex(EFFECT_INDEX_0), m_creature->GetObjectGuid(), pSpell);
+            m_creature->CastCustomSpell(pTarget, SPELL_MARK, damage, {}, {}, true, nullptr, holder->GetAuraByEffectIndex(EFFECT_INDEX_0), m_creature->GetObjectGuid(), pSpell);
         }
     }
 

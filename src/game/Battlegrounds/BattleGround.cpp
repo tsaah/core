@@ -24,9 +24,8 @@
 #include "BattleGround.h"
 #include "BattleGroundMgr.h"
 #include "Creature.h"
-#include "MapManager.h"
 #include "Language.h"
-#include "SpellAuras.h"
+#include "SpellAuraDefines.h"
 #include "World.h"
 #include "Group.h"
 #include "ObjectGuid.h"
@@ -959,10 +958,6 @@ void BattleGround::StartBattleGround()
 
 void BattleGround::AddPlayer(Player* pPlayer)
 {
-    // remove afk from player
-    if (pPlayer->IsAFK())
-        pPlayer->ToggleAFK();
-
     // score struct must be created in inherited class
 
     ObjectGuid guid = pPlayer->GetObjectGuid();

@@ -39,7 +39,6 @@ void AddSC_npcs_special();
 void AddSC_Totems();
 void AddSC_world_event_naxxramas();
 void AddSC_event_scourge_invasion();
-void AddSC_spell_scripts();
 
 //eastern kingdoms
 void AddSC_instance_blackrock_spire();
@@ -122,7 +121,6 @@ void AddSC_boss_houndmaster_loksey();
 void AddSC_boss_interrogator_vishas();
 void AddSC_boss_mograine_and_whitemane();
 void AddSC_instance_scarlet_monastery();
-void AddSC_boss_darkmaster_gandling();               //scholomance
 void AddSC_boss_theolenkrastinov();
 void AddSC_boss_illuciabarov();
 void AddSC_boss_instructormalicia();
@@ -199,7 +197,6 @@ void AddSC_instance_blackfathom_deeps();             //blackfathom_deeps
 void AddSC_boss_celebras_the_cursed();               //maraudon
 void AddSC_boss_landslide();
 void AddSC_boss_noxxion();
-void AddSC_boss_ptheradras();
 void AddSC_maraudon();
 void AddSC_instance_maraudon();
 void AddSC_instance_onyxia_lair();
@@ -291,7 +288,6 @@ void AddScripts()
     AddSC_Totems();
     AddSC_world_event_naxxramas();
     AddSC_event_scourge_invasion();
-    AddSC_spell_scripts();
 
     AddSC_war_effort();
 
@@ -374,7 +370,6 @@ void AddScripts()
     AddSC_boss_interrogator_vishas();
     AddSC_boss_mograine_and_whitemane();
     AddSC_instance_scarlet_monastery();
-    AddSC_boss_darkmaster_gandling();                       //scholomance
     AddSC_boss_theolenkrastinov();
     AddSC_boss_illuciabarov();
     AddSC_boss_instructormalicia();
@@ -451,7 +446,6 @@ void AddScripts()
     AddSC_boss_celebras_the_cursed();                       //maraudon
     AddSC_boss_landslide();
     AddSC_boss_noxxion();
-    AddSC_boss_ptheradras();
     AddSC_maraudon();
     AddSC_instance_maraudon();
     AddSC_instance_onyxia_lair();

@@ -195,7 +195,7 @@ void instance_dire_maul::OnCreatureDeath(Creature* pCreature)
                 SetData(TYPE_GORDOK_TRIBUTE, SPECIAL);
             break;
         case NPC_KING_GORDOK:
-            GetMap()->SummonCreature(NPC_MIZZLE_THE_CRAFTY, 693.44f, 480.806f, 28.175f, 0.02757f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 3000000);
+            GetMap()->SummonCreature(NPC_MIZZLE_THE_CRAFTY, 693.44f, 480.806f, 28.175f, 0.02757f, TEMPSUMMON_DEAD_DESPAWN, 3000000);
 
             if (Creature* pChorush = instance->GetCreature(m_uiChoRushTheObserverGUID))
             {
@@ -2100,7 +2100,7 @@ struct npc_alzzins_minionAI : ScriptedAI
     {
         if (!m_creature->IsInCombat())
         {
-            if (pWho->IsPlayer() && pWho->IsTargetableForAttack() && m_creature->IsWithinDistInMap(pWho, 30.0f) && m_creature->IsWithinLOSInMap(pWho))
+            if (pWho->IsPlayer() && pWho->IsTargetable(true, false) && m_creature->IsWithinDistInMap(pWho, 30.0f) && m_creature->IsWithinLOSInMap(pWho))
                 m_creature->AttackedBy(pWho);
         }
     }
@@ -2157,7 +2157,7 @@ struct boss_ferraAI : public ScriptedAI
         if (!m_creature->IsInCombat()) 
         {
             if (pWho->IsPlayer() && m_creature->IsWithinDistInMap(pWho, 80.0f) && m_creature->IsWithinLOSInMap(pWho)
-            &&  pWho->IsTargetableForAttack())
+            &&  pWho->IsTargetable(true, false))
             {
                 // don't aggro people through the floor, ever!
                 if ((m_creature->GetPositionZ() - pWho->GetPositionZ()) < 10.0f)

@@ -23,15 +23,14 @@
 #define MANGOSSERVER_GROUP_H
 
 #include "Common.h"
+#include "SharedDefines.h"
 #include "ObjectGuid.h"
 #include "GroupReference.h"
 #include "GroupRefManager.h"
 #include "BattleGround.h"
 #include "LootMgr.h"
-#include "DBCEnums.h"
-#include "SharedDefines.h"
-#include "LFGHandler.h"
 #include "LFGMgr.h"
+#include "DBCEnums.h"
 
 #include <map>
 #include <vector>
@@ -269,7 +268,7 @@ class Group
         GroupReference* GetFirstMember() { return m_memberMgr.getFirst(); }
         uint32 GetMembersCount() const { return m_memberSlots.size(); }
         uint32 GetMembersMinCount() const { return (isBGGroup() ? 1 : 2); }
-        void GetDataForXPAtKill(Unit const* victim, uint32& count,uint32& sum_level, Player* & member_with_max_level, Player* & not_gray_member_with_max_level, Player* additional = nullptr);
+        void GetDataForXPAtKill(Unit const* victim, uint32& count,uint32& sum_level, Player* & member_with_max_level, Unit* & not_gray_member_with_max_level, Player* additional = nullptr);
         uint8 GetMemberGroup(ObjectGuid guid) const
         {
             member_citerator mslot = _getMemberCSlot(guid);

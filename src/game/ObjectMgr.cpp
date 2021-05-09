@@ -24,7 +24,6 @@
 #include "Database/DatabaseImpl.h"
 #include "Database/SQLStorageImpl.h"
 #include "Policies/SingletonImp.h"
-
 #include "SQLStorages.h"
 #include "Log.h"
 #include "MapManager.h"
@@ -34,6 +33,7 @@
 #include "UpdateMask.h"
 #include "World.h"
 #include "Group.h"
+#include "Bag.h"
 #include "Transport.h"
 #include "ProgressBar.h"
 #include "Language.h"
@@ -52,6 +52,7 @@
 #include "InstanceData.h"
 #include "CharacterDatabaseCache.h"
 #include "HardcodedEvents.h"
+#include "Conditions.h"
 
 #include <limits>
 
@@ -1655,9 +1656,9 @@ void ObjectMgr::LoadCreatureDisplayInfoAddon()
                 const_cast<CreatureDisplayInfoAddon*>(minfo)->bounding_radius = DEFAULT_WORLD_OBJECT_SIZE;
             }
 
-            if (minfo->combat_reach != 1.5f)
+            if (minfo->combat_reach <= 0.0f)
             {
-                sLog.outErrorDb("Table `creature_display_info_addon` have wrong combat_reach %f for character race %u female display id %u, expected always 1.5f", minfo->combat_reach, race, raceEntry->model_f);
+                sLog.outErrorDb("Table `creature_display_info_addon` have wrong combat_reach %f for character race %u female display id %u, use 1.5f instead", minfo->combat_reach, race, raceEntry->model_f);
                 const_cast<CreatureDisplayInfoAddon*>(minfo)->combat_reach = 1.5f;
             }
         }
@@ -1678,9 +1679,9 @@ void ObjectMgr::LoadCreatureDisplayInfoAddon()
                 const_cast<CreatureDisplayInfoAddon*>(minfo)->bounding_radius = DEFAULT_WORLD_OBJECT_SIZE;
             }
 
-            if (minfo->combat_reach != 1.5f)
+            if (minfo->combat_reach <= 0.0f)
             {
-                sLog.outErrorDb("Table `creature_display_info_addon` have wrong combat_reach %f for character race %u male display id %u, expected always 1.5f", minfo->combat_reach, race, raceEntry->model_m);
+                sLog.outErrorDb("Table `creature_display_info_addon` have wrong combat_reach %f for character race %u male display id %u, use 1.5f instead", minfo->combat_reach, race, raceEntry->model_m);
                 const_cast<CreatureDisplayInfoAddon*>(minfo)->combat_reach = 1.5f;
             }
         }
@@ -1776,6 +1777,9 @@ void ObjectMgr::LoadCreatureSpells()
                 uint8 castTarget       = fields[3 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt8();
                 uint32 targetParam1    = fields[4 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
                 uint32 targetParam2    = fields[5 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt32();
+
+                if (!sScriptMgr.CheckScriptTargets(castTarget, targetParam1, targetParam2, "creature_spells", entry))
+                    continue;
 
                 uint16 castFlags        = fields[6 + i * CREATURE_SPELLS_MAX_COLUMNS].GetUInt16();
 
@@ -2022,10 +2026,9 @@ void ObjectMgr::AddCreatureToGrid(uint32 guid, CreatureData const* data)
     CellPair cell_pair = MaNGOS::ComputeCellPair(data->position.x, data->position.y);
     uint32 cell_id = (cell_pair.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
 
-    m_MapObjectGuids_lock.acquire();
+    std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
     CellObjectGuids& cell_guids = m_MapObjectGuids[data->position.mapId][cell_id];
     cell_guids.creatures.insert(guid);
-    m_MapObjectGuids_lock.release();
 }
 
 void ObjectMgr::RemoveCreatureFromGrid(uint32 guid, CreatureData const* data)
@@ -2033,10 +2036,9 @@ void ObjectMgr::RemoveCreatureFromGrid(uint32 guid, CreatureData const* data)
     CellPair cell_pair = MaNGOS::ComputeCellPair(data->position.x, data->position.y);
     uint32 cell_id = (cell_pair.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
 
-    m_MapObjectGuids_lock.acquire();
+    std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
     CellObjectGuids& cell_guids = m_MapObjectGuids[data->position.mapId][cell_id];
     cell_guids.creatures.erase(guid);
-    m_MapObjectGuids_lock.release();
 }
 
 void ObjectMgr::LoadGameobjects(bool reload)
@@ -2198,10 +2200,9 @@ void ObjectMgr::AddGameobjectToGrid(uint32 guid, GameObjectData const* data)
     CellPair cell_pair = MaNGOS::ComputeCellPair(data->position.x, data->position.y);
     uint32 cell_id = (cell_pair.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
 
-    m_MapObjectGuids_lock.acquire();
+    std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
     CellObjectGuids& cell_guids = m_MapObjectGuids[data->position.mapId][cell_id];
     cell_guids.gameobjects.insert(guid);
-    m_MapObjectGuids_lock.release();
 }
 
 void ObjectMgr::RemoveGameobjectFromGrid(uint32 guid, GameObjectData const* data)
@@ -2209,10 +2210,9 @@ void ObjectMgr::RemoveGameobjectFromGrid(uint32 guid, GameObjectData const* data
     CellPair cell_pair = MaNGOS::ComputeCellPair(data->position.x, data->position.y);
     uint32 cell_id = (cell_pair.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
 
-    m_MapObjectGuids_lock.acquire();
+    std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
     CellObjectGuids& cell_guids = m_MapObjectGuids[data->position.mapId][cell_id];
     cell_guids.gameobjects.erase(guid);
-    m_MapObjectGuids_lock.release();
 }
 
 // In order to keep database item template data correct for each patch, fix changed spell effects used by some items here.
@@ -2234,6 +2234,12 @@ void ObjectMgr::CorrectItemEffects(uint32 itemId, _ItemSpell& itemSpell)
     // The spell data was changed and the spell id removed from this item in 1.8.
     if ((itemSpell.SpellId == 23194) && (itemId == 18715))
         itemSpell.SpellId = 0;
+#endif
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_2_4
+    // Goblin Rocket Helmet and Horned Viking Helmet
+    // Charge effect was removed from spell 13327 and moved to 22641 in 1.3.
+    if (itemSpell.SpellId == 13327 && (itemId == 9394 || itemId == 10588))
+        itemSpell.SpellId = 22641;
 #endif
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
     // Bonereaver's Edge
@@ -7947,10 +7953,9 @@ void ObjectMgr::DeleteGOData(uint32 guid)
 void ObjectMgr::AddCorpseCellData(uint32 mapid, uint32 cellid, uint32 player_guid, uint32 instance)
 {
     // corpses are always added to spawn mode 0 and they are spawned by their instance id
-    m_MapObjectGuids_lock.acquire();
+    std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
     CellObjectGuids& cell_guids = m_MapObjectGuids[mapid][cellid];
     cell_guids.corpses[player_guid] = instance;
-    m_MapObjectGuids_lock.release();
 }
 
 void ObjectMgr::DeleteCorpseCellData(uint32 mapid, uint32 cellid, uint32 player_guid)
@@ -10781,16 +10786,6 @@ void ObjectMgr::LoadConditions()
 
     sLog.outString(">> Loaded %u Condition definitions", sConditionStorage.GetRecordCount());
     sLog.outString();
-}
-
-
-// Check if a player meets condition conditionId
-bool ObjectMgr::IsConditionSatisfied(uint32 conditionId, WorldObject const* target, Map const* map, WorldObject const* source, ConditionSource conditionSourceType) const
-{
-    if (ConditionEntry const* condition = sConditionStorage.LookupEntry<ConditionEntry>(conditionId))
-        return condition->Meets(target, map, source, conditionSourceType);
-
-    return false;
 }
 
 uint32 ObjectMgr::GenerateAuctionID()

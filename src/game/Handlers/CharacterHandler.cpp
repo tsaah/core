@@ -31,7 +31,6 @@
 #include "Player.h"
 #include "Guild.h"
 #include "GuildMgr.h"
-#include "UpdateMask.h"
 #include "Auth/md5.h"
 #include "ObjectAccessor.h"
 #include "Group.h"
@@ -443,14 +442,14 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPacket& recv_data)
     ObjectGuid playerGuid;
     recv_data >> playerGuid;
 
-    if (PlayerLoading() || GetPlayer() != nullptr)
+    if ((!sWorld.getConfig(CONFIG_BOOL_WORLD_AVAILABLE) && GetSecurity() == SEC_PLAYER) ||
+        PlayerLoading() || GetPlayer() != nullptr || !playerGuid.IsPlayer())
     {
-        sLog.outError("Player tryes to login again, AccountId = %d", GetAccountId());
+        WorldPacket data(SMSG_CHARACTER_LOGIN_FAILED, 1);
+        data << (uint8)1;
+        SendPacket(&data);
         return;
     }
-    if (!playerGuid.IsPlayer())
-        return;
-
 
     DEBUG_LOG("WORLD: Recvd Player Logon Message");
 
@@ -833,10 +832,12 @@ void WorldSession::HandleTutorialResetOpcode(WorldPacket& /*recv_data*/)
 
 void WorldSession::HandleSetWatchedFactionOpcode(WorldPacket& recv_data)
 {
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
     DEBUG_LOG("WORLD: Received CMSG_SET_WATCHED_FACTION");
     int32 repId;
     recv_data >> repId;
     GetPlayer()->SetInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX, repId);
+#endif
 }
 
 void WorldSession::HandleSetFactionInactiveOpcode(WorldPacket& recv_data)

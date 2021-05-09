@@ -1,17 +1,35 @@
+/*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
 #include "BattleBotAI.h"
 #include "BattleBotWaypoints.h"
 #include "Player.h"
+#include "Group.h"
+#include "CreatureAI.h"
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
 #include "PlayerBotMgr.h"
+#include "Opcodes.h"
 #include "WorldPacket.h"
 #include "World.h"
 #include "Spell.h"
 #include "SpellAuras.h"
 #include "Chat.h"
 #include "TargetedMovementGenerator.h"
-#include <random>
 
 enum BattleBotSpells
 {
@@ -968,7 +986,7 @@ void BattleBotAI::UpdateAI(uint32 const diff)
     }
     else
     {
-        if (!me->HasInArc(2 * M_PI_F / 3, pVictim) && !me->IsMoving())
+        if (!me->HasInArc(pVictim, 2 * M_PI_F / 3) && !me->IsMoving())
         {
             me->SetInFront(pVictim);
             me->SendMovementPacket(MSG_MOVE_SET_FACING, false);

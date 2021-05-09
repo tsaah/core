@@ -19,7 +19,6 @@
 #include <ctime>
 
 #include "WaypointMovementGenerator.h"
-#include "ObjectMgr.h"
 #include "Creature.h"
 #include "CreatureAI.h"
 #include "WaypointManager.h"
@@ -152,7 +151,7 @@ bool WaypointMovementGenerator<Creature>::OnArrived(Creature& creature)
     if (node.script_id)
     {
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Creature movement start script %u at point %u for %s.", node.script_id, i_currentNode, creature.GetGuidStr().c_str());
-        creature.GetMap()->ScriptsStart(sCreatureMovementScripts, node.script_id, &creature, &creature);
+        creature.GetMap()->ScriptsStart(sCreatureMovementScripts, node.script_id, creature.GetObjectGuid(), creature.GetObjectGuid());
     }
 
     // Inform script
@@ -277,16 +276,6 @@ void WaypointMovementGenerator<Creature>::GetPathInformation(std::ostringstream&
 {
     oss << "WaypointMovement: Last Reached WP: " << m_lastReachedWaypoint << " ";
     oss << "(Loaded path from " << WaypointManager::GetOriginString(m_PathOrigin) << ")\n";
-}
-
-void WaypointMovementGenerator<Creature>::AddToWaypointPauseTime(int32 waitTimeDiff)
-{
-    if (!i_nextMoveTime.Passed())
-    {
-        // Prevent <= 0, the code in Update requires to catch the change from moving to not moving
-        int32 newWaitTime = i_nextMoveTime.GetExpiry() + waitTimeDiff;
-        i_nextMoveTime.Reset(newWaitTime > 0 ? newWaitTime : 1);
-    }
 }
 
 bool WaypointMovementGenerator<Creature>::SetNextWaypoint(uint32 pointId)
@@ -530,6 +519,7 @@ void PatrolMovementGenerator::StartMove(Creature& creature)
 
     switch (leader->GetMotionMaster()->GetCurrentMovementGeneratorType())
     {
+        case RANDOM_MOTION_TYPE:
         case WAYPOINT_MOTION_TYPE:
         case HOME_MOTION_TYPE:
         case POINT_MOTION_TYPE:

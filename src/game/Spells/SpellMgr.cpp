@@ -3306,6 +3306,36 @@ namespace SpellInternal
             && !spellInfo->HasAttribute(SPELL_ATTR_EX_CANT_BE_REFLECTED) && !spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY)
             && !spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) && !spellInfo->IsPositiveSpell();
     }
+
+    bool IsSpellWithDelayableEffects(SpellEntry const* spellInfo)
+    {
+        if (spellInfo->IsCCSpell())
+            return true;
+
+        // Flash of Light triggers another spell to do the heal.
+        if (spellInfo->SpellFamilyName == SPELLFAMILY_PALADIN && spellInfo->SpellIconID == 242)
+            return true;
+
+        // Demonic Sacrifice should be batched, so it's possible to use it together with Voidwalker's Sacrifice.
+        // https://www.youtube.com/watch?v=mrEsmmJomsg
+        if (spellInfo->Id == 18788)
+            return true;
+
+        // Execute should be batched.
+        if (spellInfo->SpellFamilyName == SPELLFAMILY_WARRIOR && spellInfo->IsFitToFamilyMask<CF_WARRIOR_EXECUTE>())
+            return true;
+
+        if (spellInfo->IsChanneledSpell() || spellInfo->IsNextMeleeSwingSpell() || spellInfo->IsRangedSpell())
+            return false;
+
+        for (auto i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            if (spellInfo->Effect[i] && !spellInfo->IsDelayableEffect(i))
+                return false;
+        }
+
+        return true;
+    }
 }
 
 void SpellMgr::AssignInternalSpellFlags()
@@ -3349,6 +3379,9 @@ void SpellMgr::AssignInternalSpellFlags()
 
             if (SpellInternal::IsReflectableSpell(pSpellEntry.get()))
                 pSpellEntry->Internal |= SPELL_INTERNAL_REFLECTABLE;
+
+            if (sWorld.getConfig(CONFIG_UINT32_SPELL_EFFECT_DELAY) && SpellInternal::IsSpellWithDelayableEffects(pSpellEntry.get()))
+                pSpellEntry->Internal |= SPELL_INTERNAL_DELAYABLE_EFFECTS;
         }
     }
 }

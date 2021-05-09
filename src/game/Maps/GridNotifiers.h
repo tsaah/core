@@ -149,9 +149,9 @@ namespace MaNGOS
     struct DynamicObjectUpdater
     {
         DynamicObject &i_dynobject;
-        WorldObject* i_check;
+        SpellCaster* i_check;
         bool i_positive;
-        DynamicObjectUpdater(DynamicObject &dynobject, WorldObject* caster, bool positive) : i_dynobject(dynobject), i_positive(positive)
+        DynamicObjectUpdater(DynamicObject &dynobject, SpellCaster* caster, bool positive) : i_dynobject(dynobject), i_positive(positive)
         {
             i_check = caster;
             Unit* owner = i_check->IsUnit() ? static_cast<Unit*>(i_check)->GetOwner() : nullptr;
@@ -772,7 +772,7 @@ namespace MaNGOS
     class FriendlyCCedInRangeCheck
     {
         public:
-            FriendlyCCedInRangeCheck(WorldObject const* obj, float range) : i_obj(obj), i_range(range) {}
+            FriendlyCCedInRangeCheck(SpellCaster const* obj, float range) : i_obj(obj), i_range(range) {}
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
@@ -780,14 +780,14 @@ namespace MaNGOS
                     (u->IsCharmed() || u->IsFrozen() || u->HasUnitState(UNIT_STAT_CAN_NOT_REACT));
             }
         private:
-            WorldObject const* i_obj;
+            SpellCaster const* i_obj;
             float i_range;
     };
 
     class FriendlyMissingBuffInRangeCheck
     {
         public:
-            FriendlyMissingBuffInRangeCheck(WorldObject const* obj, float range, uint32 spellid) : i_obj(obj), i_range(range), i_spell(spellid) {}
+            FriendlyMissingBuffInRangeCheck(SpellCaster const* obj, float range, uint32 spellid) : i_obj(obj), i_range(range), i_spell(spellid) {}
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
@@ -795,7 +795,7 @@ namespace MaNGOS
                     !(u->HasAura(i_spell, EFFECT_INDEX_0) || u->HasAura(i_spell, EFFECT_INDEX_1) || u->HasAura(i_spell, EFFECT_INDEX_2));
             }
         private:
-            WorldObject const* i_obj;
+            SpellCaster const* i_obj;
             float i_range;
             uint32 i_spell;
     };
@@ -839,14 +839,14 @@ namespace MaNGOS
     class AnyFriendlyUnitInObjectRangeCheck
     {
         public:
-            AnyFriendlyUnitInObjectRangeCheck(WorldObject const* obj, float range) : i_obj(obj), i_range(range) {}
+            AnyFriendlyUnitInObjectRangeCheck(SpellCaster const* obj, float range) : i_obj(obj), i_range(range) {}
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
                 return u->IsAlive() && i_obj->IsWithinDistInMap(u, i_range) && i_obj->IsFriendlyTo(u) && u->CanSeeInWorld(i_obj);
             }
         private:
-            WorldObject const* i_obj;
+            SpellCaster const* i_obj;
             float i_range;
     };
 
@@ -897,24 +897,19 @@ namespace MaNGOS
     class AnyAoEVisibleTargetUnitInObjectRangeCheck
     {
         public:
-            AnyAoEVisibleTargetUnitInObjectRangeCheck(WorldObject const* obj, WorldObject const* originalCaster, float range)
+            AnyAoEVisibleTargetUnitInObjectRangeCheck(WorldObject const* obj, SpellCaster const* originalCaster, float range)
                 : i_obj(obj), i_originalCaster(originalCaster), i_range(range)
             {
-                i_targetForUnit = i_originalCaster->isType(TYPEMASK_UNIT);
             }
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
-                // Check contains checks for: live, non-selectable, non-attackable flags, flight check and GM check, ignore totems
-                if (!u->IsTargetableForAttack(false, i_originalCaster->IsPlayer()))
-                    return false;
-
                 // ignore totems as AoE targets
                 if (u->GetTypeId() == TYPEID_UNIT && ((Creature*)u)->IsImmuneToAoe())
                     return false;
 
                 // check visibility only for unit-like original casters
-                if (i_targetForUnit && !u->IsVisibleForOrDetect((Unit const*)i_originalCaster, i_originalCaster, false))
+                if (i_originalCaster->IsUnit() && !u->IsVisibleForOrDetect((Unit const*)i_originalCaster, i_originalCaster, false))
                     return false;
 
                 if (!u->CanSeeInWorld(i_obj))
@@ -923,33 +918,24 @@ namespace MaNGOS
                 if (!i_obj->IsWithinDistInMap(u, i_range))
                     return false;
 
-                if (i_targetForUnit)
-                    return i_originalCaster->ToUnit()->IsValidAttackTarget(u);
-                else // GameObject / Corpse case
-                    return i_originalCaster->IsHostileTo(u);
+                return i_originalCaster->IsValidAttackTarget(u);
             }
         private:
             WorldObject const* i_obj;
-            WorldObject const* i_originalCaster;
+            SpellCaster const* i_originalCaster;
             float i_range;
-            bool i_targetForUnit;
     };
 
     class AnyAoETargetUnitInObjectRangeCheck
     {
         public:
-            AnyAoETargetUnitInObjectRangeCheck(WorldObject const* obj, WorldObject const* originalCaster, float range)
+            AnyAoETargetUnitInObjectRangeCheck(WorldObject const* obj, SpellCaster const* originalCaster, float range)
                 : i_obj(obj), i_originalCaster(originalCaster), i_range(range)
             {
-                i_targetForUnit = i_originalCaster->isType(TYPEMASK_UNIT);
             }
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
-                // Check contains checks for: live, non-selectable, non-attackable flags, flight check and GM check, ignore totems
-                if (!u->IsTargetableForAttack(false, i_originalCaster->IsPlayer()))
-                    return false;
-
                 // ignore totems as AoE targets
                 if (u->GetTypeId() == TYPEID_UNIT && ((Creature*)u)->IsImmuneToAoe())
                     return false;
@@ -960,16 +946,12 @@ namespace MaNGOS
                 if (!i_obj->IsWithinDistInMap(u, i_range))
                     return false;
 
-                if (i_targetForUnit)
-                    return i_originalCaster->ToUnit()->IsValidAttackTarget(u);
-                else // GameObject / Corpse case
-                    return i_originalCaster->IsHostileTo(u);
+                return i_originalCaster->IsValidAttackTarget(u);
             }
         private:
             WorldObject const* i_obj;
-            WorldObject const* i_originalCaster;
+            SpellCaster const* i_originalCaster;
             float i_range;
-            bool i_targetForUnit;
     };
 
     // do attack at call of help to friendly crearture
@@ -1037,7 +1019,7 @@ namespace MaNGOS
                 if (!u->CanSeeInWorld(i_funit))
                     return false;
 
-                return u->IsAlive() && u->IsHostileTo(i_funit) && i_funit->IsWithinDistInMap(u, u->GetAttackDistance(i_funit));
+                return u->IsAlive() && u->IsHostileTo(i_funit) && i_funit->IsWithinDistInMap(u, u->GetAttackDistance(i_funit), true, false);
             }
         private:
             Unit* const i_funit;
@@ -1483,10 +1465,10 @@ namespace MaNGOS
                 if (!u->IsVisibleForOrDetect(m_me, m_me, false))
                     return false;
 
-                if (!u->IsWithinDistInMap(m_me, std::min(m_me->GetAttackDistance(u), m_dist)))
+                if (!u->IsWithinDistInMap(m_me, std::min(m_me->GetAttackDistance(u), m_dist), true, false))
                     return false;
 
-                if (!u->IsTargetableForAttack())
+                if (!u->IsTargetable(true, m_me->IsCharmerOrOwnerPlayerOrPlayerItself()))
                     return false;
 
                 if (m_ignoreCivilians && u->IsCreature() && static_cast<Creature*>(u)->IsCivilian())

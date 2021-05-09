@@ -25,7 +25,7 @@
 #include "PoolManager.h"
 #include "SpellMgr.h"
 #include "Spell.h"
-#include "UpdateMask.h"
+#include "Group.h"
 #include "Opcodes.h"
 #include "WorldPacket.h"
 #include "World.h"
@@ -34,13 +34,11 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
-#include "InstanceData.h"
 #include "MapManager.h"
 #include "MapPersistentStateMgr.h"
 #include "BattleGround.h"
 #include "BattleGroundAV.h"
 #include "Util.h"
-
 #include "GameObjectAI.h"
 #include "ScriptMgr.h"
 #include "ZoneScript.h"
@@ -66,7 +64,7 @@ QuaternionData QuaternionData::fromEulerAnglesZYX(float Z, float Y, float X)
     return QuaternionData(quat.x, quat.y, quat.z, quat.w);
 }
 
-GameObject::GameObject() : WorldObject(),
+GameObject::GameObject() : SpellCaster(),
     loot(this),
     m_visible(true),
     m_goInfo(nullptr)
@@ -128,6 +126,9 @@ void GameObject::AddToWorld()
 
     if (!i_AI)
         AIM_Initialize();
+
+    if (sWorld.getConfig(CONFIG_UINT32_SPELL_PROC_DELAY))
+        m_procsUpdateTimer = sWorld.getConfig(CONFIG_UINT32_SPELL_PROC_DELAY) - (WorldTimer::getMSTime() % sWorld.getConfig(CONFIG_UINT32_SPELL_PROC_DELAY));
 }
 
 void GameObject::AIM_Initialize()
@@ -304,6 +305,8 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
             m_currentSpells[i] = nullptr;                      // remove pointer
         }
     }
+
+    UpdatePendingProcs(update_diff);
 
     ///- UpdateAI
     if (i_AI)
@@ -585,7 +588,7 @@ void GameObject::Update(uint32 update_diff, uint32 /*p_time*/)
             // burning flags in some battlegrounds, if you find better condition, just add it
             if (GetGOInfo()->IsDespawnAtAction() || GetGoAnimProgress() > 0)
             {
-                SendObjectDeSpawnAnim(GetObjectGuid());
+                SendObjectDeSpawnAnim();
                 // reset flags
                 if (GetMap()->Instanceable())
                 {
@@ -665,7 +668,7 @@ void GameObject::Refresh()
 
 void GameObject::AddUniqueUse(Player* player)
 {
-    ACE_Guard <ACE_Thread_Mutex> guard(m_UniqueUsers_lock);
+    std::unique_lock<std::mutex> guard(m_UniqueUsers_lock);
 
     AddUse();
 
@@ -677,7 +680,7 @@ void GameObject::AddUniqueUse(Player* player)
 
     m_UniqueUsers.insert(player->GetObjectGuid());
 
-    guard.release();
+    guard.unlock();
 
     if (GameObjectInfo const* info = GetGOInfo())
         if (info->type == GAMEOBJECT_TYPE_SUMMONING_RITUAL &&
@@ -700,7 +703,7 @@ void GameObject::AddUniqueUse(Player* player)
 
 void GameObject::RemoveUniqueUse(Player* player)
 {
-    ACE_Guard <ACE_Thread_Mutex> guard(m_UniqueUsers_lock);
+    const std::lock_guard<std::mutex> guard(m_UniqueUsers_lock);
 
     auto itr = m_UniqueUsers.find(player->GetObjectGuid());
     if (itr == m_UniqueUsers.end())
@@ -729,7 +732,7 @@ void GameObject::RemoveUniqueUse(Player* player)
 
 void GameObject::FinishRitual()
 {
-    ACE_Guard <ACE_Thread_Mutex> guard(m_UniqueUsers_lock);
+    std::unique_lock<std::mutex> guard(m_UniqueUsers_lock);
 
     if (GameObjectInfo const* info = GetGOInfo())
     {
@@ -748,7 +751,7 @@ void GameObject::FinishRitual()
             {
                 std::advance(it, urand(0, m_UniqueUsers.size() - 1));
 
-                guard.release();
+                guard.unlock();
 
                 if (Player* target = GetMap()->GetPlayer(*it))
                     target->CastSpell(target, spellid, true);
@@ -759,13 +762,13 @@ void GameObject::FinishRitual()
 
 bool GameObject::HasUniqueUser(Player* player)
 {
-    ACE_Guard <ACE_Thread_Mutex> guard(m_UniqueUsers_lock);
+    const std::lock_guard<std::mutex> guard(m_UniqueUsers_lock);
     return m_UniqueUsers.find(player->GetObjectGuid()) != m_UniqueUsers.end();
 }
 
 uint32 GameObject::GetUniqueUseCount()
 {
-    ACE_Guard <ACE_Thread_Mutex> guard(m_UniqueUsers_lock);
+    const std::lock_guard<std::mutex> guard(m_UniqueUsers_lock);
     return m_UniqueUsers.size();
 }
 
@@ -784,7 +787,7 @@ void GameObject::Delete()
     // no despawn animation for not activated rituals
     if (GetGoType() != GAMEOBJECT_TYPE_SUMMONING_RITUAL ||
         GetGoState() == GO_STATE_ACTIVE)
-        SendObjectDeSpawnAnim(GetObjectGuid());
+        SendObjectDeSpawnAnim();
 
     if (!IsDeleted())
         AddObjectToRemoveList();
@@ -1027,6 +1030,17 @@ Unit* GameObject::GetOwner() const
     if (!FindMap())
         return nullptr;
     return FindMap()->GetUnit(GetOwnerGuid());
+}
+
+Player* GameObject::GetAffectingPlayer() const
+{
+    if (!GetOwnerGuid())
+        return nullptr;
+
+    if (Unit* owner = GetOwner())
+        return owner->GetCharmerOrOwnerPlayerOrPlayerItself();
+
+    return nullptr;
 }
 
 void GameObject::SaveRespawnTime()
@@ -1359,7 +1373,7 @@ void GameObject::Use(Unit* user)
             UseDoorOrButton();
 
             // activate script
-            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user, this);
+            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user->GetObjectGuid(), GetObjectGuid());
             return;
         }
         case GAMEOBJECT_TYPE_BUTTON:                        // 1
@@ -1373,7 +1387,7 @@ void GameObject::Use(Unit* user)
             UseDoorOrButton();
 
             // activate script
-            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user, this);
+            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user->GetObjectGuid(), GetObjectGuid());
 
             TriggerLinkedGameObject(user);
             return;
@@ -1398,7 +1412,7 @@ void GameObject::Use(Unit* user)
             if (user->GetTypeId() != TYPEID_PLAYER)
                 return;
 
-            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user, this);
+            GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user->GetObjectGuid(), GetObjectGuid());
             TriggerLinkedGameObject(user);
             return;
         }
@@ -1543,10 +1557,10 @@ void GameObject::Use(Unit* user)
                     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Goober ScriptStart id %u for GO entry %u (GUID %u).", info->goober.eventId, GetEntry(), GetGUIDLow());
 
                     if (!sScriptMgr.OnProcessEvent(info->goober.eventId, player, this, true))
-                        GetMap()->ScriptsStart(sEventScripts, info->goober.eventId, player, this);
+                        GetMap()->ScriptsStart(sEventScripts, info->goober.eventId, player->GetObjectGuid(), GetObjectGuid());
                 }
                 else
-                    GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user, this);
+                    GetMap()->ScriptsStart(sGameObjectScripts, GetGUIDLow(), user->GetObjectGuid(), GetObjectGuid());
 
                 // possible quest objective for active quests
                 if (info->goober.questId > 0 && sObjectMgr.GetQuestTemplate(info->goober.questId))
@@ -1596,7 +1610,7 @@ void GameObject::Use(Unit* user)
             if (info->camera.eventID)
             {
                 if (!sScriptMgr.OnProcessEvent(info->camera.eventID, player, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->camera.eventID, player, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->camera.eventID, player->GetObjectGuid(), GetObjectGuid());
             }
 
             return;
@@ -1864,7 +1878,7 @@ void GameObject::Use(Unit* user)
                     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "FlagDrop ScriptStart id %u for GO entry %u (GUID %u).", info->flagdrop.eventID, GetEntry(), GetGUIDLow());
 
                     if (!sScriptMgr.OnProcessEvent(info->flagdrop.eventID, player, this, true))
-                        GetMap()->ScriptsStart(sEventScripts, info->flagdrop.eventID, player, this);
+                        GetMap()->ScriptsStart(sEventScripts, info->flagdrop.eventID, player->GetObjectGuid(), GetObjectGuid());
                 }
                 
                 spellId = info->flagdrop.pickupSpell;
@@ -1902,45 +1916,45 @@ void GameObject::Use(Unit* user)
             if (info->capturePoint.winEventID1)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.winEventID1, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.winEventID1, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.winEventID1, user->GetObjectGuid(), GetObjectGuid());
             }
             if (info->capturePoint.winEventID2)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.winEventID2, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.winEventID2, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.winEventID2, user->GetObjectGuid(), GetObjectGuid());
             }
 
             if (info->capturePoint.contestedEventID1)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.contestedEventID1, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.contestedEventID1, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.contestedEventID1, user->GetObjectGuid(), GetObjectGuid());
             }
             if (info->capturePoint.contestedEventID2)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.contestedEventID2, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.contestedEventID2, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.contestedEventID2, user->GetObjectGuid(), GetObjectGuid());
             }
 
             if (info->capturePoint.progressEventID1)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.progressEventID1, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.progressEventID1, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.progressEventID1, user->GetObjectGuid(), GetObjectGuid());
             }
             if (info->capturePoint.progressEventID2)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.progressEventID2, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.progressEventID2, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.progressEventID2, user->GetObjectGuid(), GetObjectGuid());
             }
 
             if (info->capturePoint.neutralEventID1)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.neutralEventID1, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.neutralEventID1, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.neutralEventID1, user->GetObjectGuid(), GetObjectGuid());
             }
             if (info->capturePoint.neutralEventID2)
             {
                 if (!sScriptMgr.OnProcessEvent(info->capturePoint.neutralEventID2, user, this, true))
-                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.neutralEventID2, user, this);
+                    GetMap()->ScriptsStart(sEventScripts, info->capturePoint.neutralEventID2, user->GetObjectGuid(), GetObjectGuid());
             }
 
             // Some has spell, need to process those further.
@@ -2375,7 +2389,7 @@ void GameObject::SendGameObjectReset()
 
 void GameObject::Despawn()
 {
-    SendObjectDeSpawnAnim(GetObjectGuid());
+    SendObjectDeSpawnAnim();
     if (GameObjectData const* data = GetGOData())
     {
         if (m_spawnedByDefault)
@@ -2416,58 +2430,6 @@ uint32 GameObject::GetLevel() const
         level = GetUInt32Value(GAMEOBJECT_LEVEL);
 
     return level > 0 ? level : PLAYER_MAX_LEVEL;
-}
-
-// function based on function Unit::CanAttack from 13850 client
-bool GameObject::IsValidAttackTarget(Unit const* target) const
-{
-    ASSERT(target);
-
-    if (FindMap() != target->FindMap())
-        return false;
-
-    // can't attack unattackable units or GMs
-    if (target->GetTypeId() == TYPEID_PLAYER && target->ToPlayer()->IsGameMaster())
-        return false;
-
-    // check flags
-    if (target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_TAXI_FLIGHT | UNIT_FLAG_NOT_ATTACKABLE_1 | UNIT_FLAG_NON_ATTACKABLE_2))
-        return false;
-
-    // CvC case - can attack each other only when one of them is hostile
-    if (!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
-        return GetReactionTo(target) <= REP_HOSTILE || target->GetReactionTo(this) <= REP_HOSTILE;
-
-    // PvP, PvC, CvP case
-    // can't attack friendly targets
-    if (GetReactionTo(target) > REP_NEUTRAL
-        || target->GetReactionTo(this) > REP_NEUTRAL)
-        return false;
-
-    Player const* playerAffectingTarget = target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED) ? target->GetAffectingPlayer() : nullptr;
-
-    // Not all neutral creatures can be attacked
-    if (GetReactionTo(target) == REP_NEUTRAL &&
-        target->GetReactionTo(this) == REP_NEUTRAL)
-    {
-        if (playerAffectingTarget)
-        {
-            Player const* player = playerAffectingTarget;
-            WorldObject const* non_player = this;
-
-            if (FactionTemplateEntry const* factionTemplate = non_player->getFactionTemplateEntry())
-            {
-                if (!(player->GetReputationMgr().GetForcedRankIfAny(factionTemplate)))
-                    if (FactionEntry const* factionEntry = sObjectMgr.GetFactionEntry(factionTemplate->faction))
-                        if (FactionState const* repState = player->GetReputationMgr().GetState(factionEntry))
-                            if (!(repState->Flags & FACTION_FLAG_AT_WAR))
-                                return false;
-
-            }
-        }
-    }
-
-    return true;
 }
 
 bool GameObject::IsAtInteractDistance(Player const* player, uint32 maxRange) const
@@ -2540,7 +2502,7 @@ SpellEntry const* GameObject::GetSpellForLock(Player const* player) const
             if (SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(playerSpell.first))
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
                     if (spellInfo->Effect[i] == SPELL_EFFECT_OPEN_LOCK && ((uint32)spellInfo->EffectMiscValue[i]) == lock->Index[i])
-                        if (player->CalculateSpellDamage(nullptr, spellInfo, SpellEffectIndex(i), nullptr) >= int32(lock->Skill[i]))
+                        if (player->CalculateSpellEffectValue(nullptr, spellInfo, SpellEffectIndex(i), nullptr) >= int32(lock->Skill[i]))
                             return spellInfo;
     }
 

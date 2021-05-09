@@ -21,24 +21,19 @@
 #define _OBJECTMGR_H
 
 #include "Common.h"
-#include "Log.h"
 #include "Object.h"
-#include "Bag.h"
-#include "Creature.h"
-#include "Player.h"
+#include "CreatureDefines.h"
 #include "GameObject.h"
 #include "Corpse.h"
 #include "QuestDef.h"
 #include "ItemPrototype.h"
 #include "NPCHandler.h"
 #include "Database/DatabaseEnv.h"
-#include "Map.h"
 #include "MapPersistentStateMgr.h"
 #include "ObjectAccessor.h"
 #include "ObjectGuid.h"
 #include "Policies/Singleton.h"
 #include "SQLStorages.h"
-#include "Conditions.h"
 
 #include <string>
 #include <map>
@@ -129,29 +124,6 @@ struct SoundEntriesEntry
     uint32          Id;
     std::string     Name;
 };
-
-// Number of spells in one template
-#define CREATURE_SPELLS_MAX_SPELLS 8
-// Columns in the db for each spell
-#define CREATURE_SPELLS_MAX_COLUMNS 11
-
-struct CreatureSpellsEntry
-{
-    uint16 const spellId;
-    uint8 const  probability;
-    uint8 const  castTarget;
-    uint32 const targetParam1;
-    uint32 const targetParam2;
-    uint16 const  castFlags;
-    uint32 const delayInitialMin;
-    uint32 const delayInitialMax;
-    uint32 const delayRepeatMin;
-    uint32 const delayRepeatMax;
-    uint32 const scriptId;
-    CreatureSpellsEntry(uint16 Id, uint8 Probability, uint8 CastTarget, uint32 TargetParam1, uint32 TargetParam2, uint16 CastFlags, uint32 InitialMin, uint32 InitialMax, uint32 RepeatMin, uint32 RepeatMax, uint32 ScriptId) : spellId(Id), probability(Probability), castTarget(CastTarget), targetParam1(TargetParam1), targetParam2(TargetParam2), castFlags(CastFlags), delayInitialMin(InitialMin), delayInitialMax(InitialMax), delayRepeatMin(RepeatMin), delayRepeatMax(RepeatMax), scriptId(ScriptId) {}
-};
-
-typedef std::vector<CreatureSpellsEntry> CreatureSpellsList;
 
 typedef std::unordered_map<uint32, CreatureSpellsList> CreatureSpellsMap;
 
@@ -1116,12 +1088,11 @@ class ObjectMgr
         // global grid objects state (static DB spawns, global spawn mods from gameevent system)
         CellObjectGuids const& GetCellObjectGuids(uint16 mapid, uint32 cell_id)
         {
-            m_MapObjectGuids_lock.acquire();
+            std::unique_lock<std::mutex> lock(m_MapObjectGuids_lock);
             CellObjectGuids const& guids = m_MapObjectGuids[mapid][cell_id];
-            m_MapObjectGuids_lock.release();
             return guids;
         }
-        ACE_Thread_Mutex& GetCellLoadingObjectsMutex() // TODO: Mutex per cell?
+        std::mutex& GetCellLoadingObjectsMutex() // TODO: Mutex per cell?
         {
             return m_MapObjectGuids_lock;
         }
@@ -1146,8 +1117,6 @@ class ObjectMgr
 
         int GetIndexForLocale(LocaleConstant loc);
         LocaleConstant GetLocaleForIndex(int i);
-
-        bool IsConditionSatisfied(uint32 conditionId, WorldObject const* target, Map const* map, WorldObject const* source, ConditionSource conditionSourceType) const;
 
         GameTele const* GetGameTele(uint32 id) const
         {
@@ -1505,11 +1474,12 @@ class ObjectMgr
         FishingBaseSkillMap m_FishingBaseSkillMap;
 
         typedef std::map<uint32,std::vector<std::string> > HalfNameMap;
+
         HalfNameMap m_PetHalfNameMap0;
         HalfNameMap m_PetHalfNameMap1;
 
         MapObjectGuids m_MapObjectGuids;
-        ACE_Thread_Mutex m_MapObjectGuids_lock;
+        std::mutex m_MapObjectGuids_lock;
 
         CreatureDataMap m_CreatureDataMap;
         CreatureLocaleMap m_CreatureLocaleMap;

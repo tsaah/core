@@ -247,14 +247,14 @@ struct boss_twinemperorsAI : public ScriptedAI
         if (!who || m_creature->GetVictim() || m_creature->IsInCombat())
             return;
 
-        if (who->IsTargetableForAttack() && who->IsInAccessablePlaceFor(m_creature) && m_creature->IsHostileTo(who))
+        if (who->IsTargetable(true, false) && who->IsInAccessablePlaceFor(m_creature) && m_creature->IsHostileTo(who))
         {
             float attackRadius = m_creature->GetAttackDistance(who);
             if (attackRadius < PULL_RANGE)
                 attackRadius = PULL_RANGE;
 
             // CREATURE_Z_ATTACK_RANGE there are stairs
-            if (m_creature->IsWithinDistInMap(who, attackRadius) && m_creature->GetDistanceZ(who) <= 7)
+            if (m_creature->IsWithinDistInMap(who, attackRadius, true, false) && m_creature->GetDistanceZ(who) <= 7)
                 AttackStart(who);
         }
     }

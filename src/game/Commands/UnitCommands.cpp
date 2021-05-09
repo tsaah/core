@@ -15,14 +15,11 @@
  */
 
 #include "Common.h"
-#include "Database/DatabaseEnv.h"
 #include "World.h"
 #include "Player.h"
 #include "Chat.h"
 #include "Language.h"
 #include "ObjectMgr.h"
-#include "SystemConfig.h"
-#include "revision.h"
 #include "Util.h"
 #include "SpellAuras.h"
 #include "TargetedMovementGenerator.h"
@@ -314,6 +311,28 @@ bool ChatHandler::HandleUnitInfoCommand(char* args)
     return true;
 }
 
+bool ChatHandler::HandleUnitSpeedInfoCommand(char* args)
+{
+    Unit* pTarget = GetSelectedUnit();
+
+    if (!pTarget)
+    {
+        SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    PSendSysMessage("Speed info for %s", pTarget->GetObjectGuid().GetString().c_str());
+    PSendSysMessage("Walk: %g", pTarget->GetSpeed(MOVE_WALK));
+    PSendSysMessage("Run: %g", pTarget->GetSpeed(MOVE_RUN));
+    PSendSysMessage("Run Back: %g", pTarget->GetSpeed(MOVE_RUN_BACK));
+    PSendSysMessage("Swim: %g", pTarget->GetSpeed(MOVE_SWIM));
+    PSendSysMessage("Swim Back: %g", pTarget->GetSpeed(MOVE_SWIM_BACK));
+    PSendSysMessage("Turn: %g", pTarget->GetSpeed(MOVE_TURN_RATE));
+
+    return true;
+}
+
 bool ChatHandler::HandleUnitStatInfoCommand(char* args)
 {
     Unit* pTarget = GetSelectedUnit();
@@ -340,7 +359,7 @@ bool ChatHandler::HandleUnitStatInfoCommand(char* args)
     PSendSysMessage("Happiness: %u", pTarget->GetPower(POWER_HAPPINESS));
     PSendSysMessage("Max Happiness: %u", pTarget->GetMaxPower(POWER_HAPPINESS));
     PSendSysMessage("Base attack time: %g", pTarget->GetFloatValue(UNIT_FIELD_BASEATTACKTIME));
-    PSendSysMessage("Off hand attack time: %g", pTarget->GetFloatValue(UNIT_FIELD_OFFHANDATTACKTIME));
+    PSendSysMessage("Off hand attack time: %g", pTarget->GetFloatValue(UNIT_FIELD_BASEATTACKTIME+1));
     PSendSysMessage("Ranged attack time: %g", pTarget->GetFloatValue(UNIT_FIELD_RANGEDATTACKTIME));
     PSendSysMessage("Min damage: %g", pTarget->GetFloatValue(UNIT_FIELD_MINDAMAGE));
     PSendSysMessage("Max damage: %g", pTarget->GetFloatValue(UNIT_FIELD_MAXDAMAGE));
@@ -671,6 +690,29 @@ bool ChatHandler::HandleListMoveGensCommand(char* /*args*/)
     unit->GetMotionMaster()->GetUsedMovementGeneratorsList(generators);
     for (uint32 i = 0; i < generators.size(); i++)
         PSendSysMessage("%u. %s (%u)", (i+1), MotionMaster::GetMovementGeneratorTypeName(generators[i]), generators[i]);
+
+    return true;
+}
+
+bool ChatHandler::HandleListHostileRefsCommand(char* /*args*/)
+{
+    Unit* pUnit = GetSelectedUnit();
+    if (!pUnit)
+    {
+        SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    PSendSysMessage("List of hostile references for %s:", pUnit->GetObjectGuid().GetString().c_str());
+    HostileReference* pReference = pUnit->GetHostileRefManager().getFirst();
+    uint32 counter = 1;
+    while (pReference)
+    {
+        if (Unit* pTarget = pReference->getSourceUnit())
+            PSendSysMessage("%u. %s", counter++, pTarget->GetGuidStr().c_str());
+        pReference = pReference->next();
+    }
 
     return true;
 }
@@ -1087,7 +1129,7 @@ bool ChatHandler::HandleModifyHolyCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_01, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+1, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_HOLY, pTarget->GetName(), amount);
 
@@ -1115,7 +1157,7 @@ bool ChatHandler::HandleModifyFireCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_02, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+2, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_FIRE, pTarget->GetName(), amount);
 
@@ -1143,7 +1185,7 @@ bool ChatHandler::HandleModifyNatureCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_03, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+3, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_NATURE, pTarget->GetName(), amount);
 
@@ -1171,7 +1213,7 @@ bool ChatHandler::HandleModifyFrostCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_04, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+4, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_FROST, pTarget->GetName(), amount);
 
@@ -1199,7 +1241,7 @@ bool ChatHandler::HandleModifyShadowCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_05, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+5, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_SHADOW, pTarget->GetName(), amount);
 
@@ -1227,7 +1269,7 @@ bool ChatHandler::HandleModifyArcaneCommand(char *args)
     if (!ExtractInt32(&args, amount))
         return false;
 
-    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES_06, amount);
+    pTarget->SetInt32Value(UNIT_FIELD_RESISTANCES+6, amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_ARCANE, pTarget->GetName(), amount);
 
@@ -1337,7 +1379,7 @@ bool ChatHandler::HandleModifySpellPowerCommand(char *args)
 
     // dunno where spell power is stored so using a custom spell
     pTarget->RemoveAurasDueToSpell(18058);
-    pTarget->CastCustomSpell(pTarget, 18058, &amount, &amount, nullptr, true);
+    pTarget->CastCustomSpell(pTarget, 18058, amount, amount, {}, true);
 
     PSendSysMessage(LANG_YOU_CHANGE_SP, pTarget->GetName(), amount);
 
@@ -1407,7 +1449,7 @@ bool ChatHandler::HandleModifyOffSpeedCommand(char *args)
         return false;
     }
 
-    pTarget->SetFloatValue(UNIT_FIELD_OFFHANDATTACKTIME, (float) amount);
+    pTarget->SetFloatValue(UNIT_FIELD_BASEATTACKTIME+1, (float) amount);
 
     PSendSysMessage(LANG_YOU_CHANGE_OHSPD, pTarget->GetName(), amount);
 
@@ -1875,7 +1917,7 @@ bool ChatHandler::HandleDamageCommand(char* args)
     SpellSchoolMask schoolmask = GetSchoolMask(school);
 
     if (schoolmask & SPELL_SCHOOL_MASK_NORMAL)
-        damage = player->CalcArmorReducedDamage(target, damage);
+        damage = ditheru(player->CalcArmorReducedDamage(target, damage));
 
     // melee damage by specific school
     if (!*args)
