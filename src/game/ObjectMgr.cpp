@@ -161,9 +161,6 @@ ObjectMgr::~ObjectMgr()
 
     for (auto& itr : m_CacheTrainerSpellMap)
         itr.second.Clear();
-
-    for (auto& itr : m_playerCacheData)
-        delete itr.second;
 }
 
 void ObjectMgr::LoadAllIdentifiers()
@@ -648,24 +645,39 @@ void ObjectMgr::LoadSavedVariable()
 }
 
 // Caching player data
-void ObjectMgr::LoadPlayerCacheData()
+void ObjectMgr::LoadPlayerCacheData(uint32 lowGuid)
 {
-    m_playerCacheData.clear();
-    m_playerNameToGuid.clear();
+    std::unique_ptr<QueryResult> result;
+    if (!lowGuid)
+    {
+        // load all characters (likely at startup)
+        m_playerCacheData.clear();
+        m_playerNameToGuid.clear();
 
-    std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-        //       0       1       2        3         4          5       6        7          8      9             10            11            12             13
-        "SELECT `guid`, `race`, `class`, `gender`, `account`, `name`, `level`, `zone`, `map`, `position_x`, `position_y`, `position_z`, `orientation`, `current_taxi_path` FROM `characters`;"));
+        result.reset(CharacterDatabase.Query(
+            //       0       1       2        3         4          5       6        7          8      9             10            11            12             13
+            "SELECT `guid`, `race`, `class`, `gender`, `account`, `name`, `level`, `zone`, `map`, `position_x`, `position_y`, `position_z`, `orientation`, `current_taxi_path` FROM `characters`;"));
+    }
+    else
+    {
+        // load a single character (likely just restored)
+        result.reset(CharacterDatabase.PQuery(
+            //       0       1       2        3         4          5       6        7          8      9             10            11            12             13
+            "SELECT `guid`, `race`, `class`, `gender`, `account`, `name`, `level`, `zone`, `map`, `position_x`, `position_y`, `position_z`, `orientation`, `current_taxi_path` FROM `characters` WHERE `guid`=%u;", lowGuid));
+    }
 
-    uint32 total_count = 0;
+    uint32 totalCount = 0;
 
     if (!result)
     {
-        BarGoLink bar(1);
-        bar.step();
+        if (!lowGuid)
+        {
+            BarGoLink bar(1);
+            bar.step();
 
-        sLog.outString();
-        sLog.outString(">> Loaded 0 cached player data ...");
+            sLog.outString();
+            sLog.outString(">> Loaded 0 cached player data ...");
+        }
         return;
     }
 
@@ -686,23 +698,34 @@ void ObjectMgr::LoadPlayerCacheData()
             UpdatePlayerCachedPosition(data, fields[8].GetUInt32(), fields[9].GetFloat(), fields[10].GetFloat(),
                 fields[11].GetFloat(), fields[12].GetFloat(), !fields[13].GetCppString().empty());
         }
-        ++total_count;
+        ++totalCount;
     }
     while (result->NextRow());
 
-    sLog.outString();
-    sLog.outString(">> Loaded %u players in cache.", total_count);
+    if (!lowGuid)
+    {
+        sLog.outString();
+        sLog.outString(">> Loaded %u players in cache.", totalCount);
+    }
 }
 
-PlayerCacheData* ObjectMgr::GetPlayerDataByGUID(uint32 guidLow) const
+PlayerCacheData* ObjectMgr::GetPlayerDataByGUID(uint32 guidLow)
 {
     auto itr = m_playerCacheData.find(guidLow);
     if (itr != m_playerCacheData.end())
-        return itr->second;
+        return &itr->second;
     return nullptr;
 }
 
-PlayerCacheData* ObjectMgr::GetPlayerDataByName(std::string const& name) const
+PlayerCacheData const* ObjectMgr::GetPlayerDataByGUID(uint32 guidLow) const
+{
+    auto itr = m_playerCacheData.find(guidLow);
+    if (itr != m_playerCacheData.end())
+        return &itr->second;
+    return nullptr;
+}
+
+PlayerCacheData const* ObjectMgr::GetPlayerDataByName(std::string const& name) const
 {
     if (ObjectGuid guid = GetPlayerGuidByName(name))
         return GetPlayerDataByGUID(guid.GetCounter());
@@ -748,7 +771,7 @@ uint8 ObjectMgr::GetPlayerClassByGUID(ObjectGuid guid) const
 
     uint32 lowguid = guid.GetCounter();
 
-    if (PlayerCacheData* data = GetPlayerDataByGUID(lowguid))
+    if (PlayerCacheData const* data = GetPlayerDataByGUID(lowguid))
     {
         return data->uiClass;
     }
@@ -800,7 +823,7 @@ void ObjectMgr::UpdatePlayerCachedPosition(Player* pPlayer)
     if (iter == m_playerCacheData.end())
         data = InsertPlayerInCache(pPlayer);
     else
-        data = iter->second;
+        data = &iter->second;
 
     if (!data)
         return;
@@ -815,7 +838,7 @@ void ObjectMgr::UpdatePlayerCachedPosition(uint32 lowGuid, uint32 mapId, float p
     if (iter == m_playerCacheData.end())
         return;
 
-    UpdatePlayerCachedPosition(iter->second, mapId, posX, posY, posZ, o, inFlight);
+    UpdatePlayerCachedPosition(&iter->second, mapId, posX, posY, posZ, o, inFlight);
 }
 
 void ObjectMgr::UpdatePlayerCachedPosition(PlayerCacheData* data, uint32 mapId, float posX, float posY, float posZ, float o, bool inFlight)
@@ -835,7 +858,7 @@ void ObjectMgr::UpdatePlayerCache(Player* pPlayer)
     if (iter == m_playerCacheData.end())
         data = InsertPlayerInCache(pPlayer);
     else
-        data = iter->second;
+        data = &iter->second;
 
     if (!data)
         return;
@@ -858,14 +881,11 @@ void ObjectMgr::UpdatePlayerCache(PlayerCacheData* data, uint32 race, uint32 _cl
 
 PlayerCacheData* ObjectMgr::InsertPlayerInCache(uint32 lowGuid, uint32 race, uint32 _class, uint32 gender, uint32 accountId, std::string const& name, uint32 level, uint32 zoneId)
 {
-    auto data = new PlayerCacheData;
-    data->uiGuid = lowGuid;
-    UpdatePlayerCache(data, race, _class, gender, accountId, name, level, zoneId);
-
-    m_playerCacheData[lowGuid] = data;
+    PlayerCacheData& data = m_playerCacheData[lowGuid];
+    data.uiGuid = lowGuid;
+    UpdatePlayerCache(&data, race, _class, gender, accountId, name, level, zoneId);
     m_playerNameToGuid[name] = lowGuid;
-
-    return data;
+    return &data;
 }
 
 void ObjectMgr::DeletePlayerFromCache(uint32 lowGuid)
@@ -873,7 +893,7 @@ void ObjectMgr::DeletePlayerFromCache(uint32 lowGuid)
     auto itr = m_playerCacheData.find(lowGuid);
     if (itr != m_playerCacheData.end())
     {
-        auto itr2 = m_playerNameToGuid.find(itr->second->sName);
+        auto itr2 = m_playerNameToGuid.find(itr->second.sName);
         if (itr2 != m_playerNameToGuid.end())
             m_playerNameToGuid.erase(itr2);
         m_playerCacheData.erase(itr);
@@ -887,16 +907,16 @@ void ObjectMgr::ChangePlayerNameInCache(uint32 guidLow, std::string const& oldNa
     {
         m_playerNameToGuid.erase(oldName);
         m_playerNameToGuid[newName] = guidLow;
-        itr->second->sName = newName;
+        itr->second.sName = newName;
     }
 }
 
-void ObjectMgr::GetPlayerDataForAccount(uint32 accountId, std::list<PlayerCacheData*>& data) const
+void ObjectMgr::GetPlayerDataForAccount(uint32 accountId, std::list<PlayerCacheData const*>& data) const
 {
     for (const auto& iter : m_playerCacheData)
     {
-        if (iter.second->uiAccount == accountId)
-            data.push_back(iter.second);
+        if (iter.second.uiAccount == accountId)
+            data.push_back(&iter.second);
     }
 }
 
@@ -1315,11 +1335,11 @@ void ObjectMgr::CheckCreatureTemplates()
         else if (((1 << (cInfo->unit_class - 1)) & CLASSMASK_ALL_CREATURES) == 0)
             sLog.outErrorDb("Creature (Entry: %u) has invalid unit_class(%u) for creature_template", cInfo->entry, cInfo->unit_class);
 
-        if (cInfo->dmg_school >= MAX_SPELL_SCHOOL)
+        if (cInfo->damage_school >= MAX_SPELL_SCHOOL)
         {
-            sLog.outErrorDb("Creature (Entry: %u) has invalid spell school value (%u) in `dmg_school`", cInfo->entry, cInfo->dmg_school);
+            sLog.outErrorDb("Creature (Entry: %u) has invalid spell school value (%u) in `dmg_school`", cInfo->entry, cInfo->damage_school);
             sLog.out(LOG_DBERRFIX, "UPDATE creature_template SET `dmg_school`=%u WHERE entry=%u;", SPELL_SCHOOL_NORMAL, cInfo->entry);
-            const_cast<CreatureInfo*>(cInfo)->dmg_school = SPELL_SCHOOL_NORMAL;
+            const_cast<CreatureInfo*>(cInfo)->damage_school = SPELL_SCHOOL_NORMAL;
         }
 
         if (cInfo->base_attack_time == 0)
@@ -1642,6 +1662,18 @@ void ObjectMgr::LoadCreatureDisplayInfoAddon()
                 const_cast<CreatureDisplayInfoAddon*>(minfo)->display_id_other_gender = 0;
             }
         }
+
+        if (minfo->speed_walk <= 0.0f)
+        {
+            sLog.outErrorDb("Table `creature_display_info_addon` has invalid walk speed (%g) defined for display id %u.", minfo->speed_walk, minfo->display_id);
+            const_cast<CreatureDisplayInfoAddon*>(minfo)->speed_walk = DEFAULT_NPC_WALK_SPEED_RATE;
+        }
+
+        if (minfo->speed_run <= 0.0f)
+        {
+            sLog.outErrorDb("Table `creature_display_info_addon` has invalid run speed (%g) defined for display id %u.", minfo->speed_run, minfo->display_id);
+            const_cast<CreatureDisplayInfoAddon*>(minfo)->speed_run = DEFAULT_NPC_RUN_SPEED_RATE;
+        }
     }
 
     // character races expected have display info data in table
@@ -1844,6 +1876,271 @@ void ObjectMgr::LoadCreatureSpells()
     sLog.outString(">> Loaded %lu creature spell templates.", (unsigned long)m_CreatureSpellsMap.size());
 }
 
+void ObjectMgr::LoadCreatureClassLevelStats()
+{
+    m_CreatureCLSMap.clear();
+
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT DISTINCT `unit_class` FROM `creature_template`"));
+
+    std::set<uint32> creatureClasses;
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 unitClass = fields[0].GetUInt32();
+            creatureClasses.insert(unitClass);
+        } while (result->NextRow());
+    }
+
+    // placeholder values
+    constexpr float phMeleeDamage = 1.5f;
+    constexpr float phRangedDamage = 1.3f;
+    constexpr float phDamageIncreasePerLevel = 1.2f;
+    constexpr int32 phStat = 20;
+    constexpr float phStatIncreasePerLevel = 0.1f;
+    constexpr int32 phArmorPerLevel = 30;
+
+    for (auto unitClass : creatureClasses)
+    {
+        result.reset(WorldDatabase.PQuery("SELECT MAX(`level_max`) FROM `creature_template` WHERE `unit_class`=%u", unitClass));
+
+        uint32 requiredMaxLevel = MAX_LEVEL;
+        if (result)
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                uint32 maxLevel = fields[0].GetUInt32();
+                if (maxLevel > requiredMaxLevel)
+                    requiredMaxLevel = maxLevel;
+            } while (result->NextRow());
+        }
+
+        result.reset(WorldDatabase.PQuery("SELECT MAX(`level`) FROM `creature_classlevelstats` WHERE `class`=%u", unitClass));
+
+        uint32 currentMaxLevel = CREATURE_MAX_LEVEL;
+        if (result)
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                uint32 maxLevel = fields[0].GetUInt32();
+
+                if (maxLevel > currentMaxLevel)
+                    currentMaxLevel = maxLevel;
+                else if (!maxLevel)
+                    sLog.outErrorDb("Missing creature CLS data for `class` = %u used in creature_template!", unitClass);
+
+                m_CreatureCLSMap[unitClass].resize(std::max(requiredMaxLevel, currentMaxLevel));
+                
+            } while (result->NextRow());
+        }
+
+        //                                         0        1               2                3               4                      5         6              7       8            9           10         11         12           13        14
+        result.reset(WorldDatabase.PQuery("SELECT `level`, `melee_damage`, `ranged_damage`, `attack_power`, `ranged_attack_power`, `health`, `base_health`, `mana`, `base_mana`, `strength`, `agility`, `stamina`, `intellect`, `spirit`, `armor` FROM `creature_classlevelstats` WHERE `class`=%u ORDER BY `level`", unitClass));
+
+        if (result)
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                uint32 level = fields[0].GetUInt32();
+
+                if (!level)
+                {
+                    sLog.outErrorDb("Table `creature_classlevelstats` contains data for invalid `level` = %u!", level);
+                    continue;
+                }
+
+                uint32 i = level - 1;
+                CreatureClassLevelStats& cls = m_CreatureCLSMap[unitClass][i];
+                cls.melee_damage = fields[1].GetFloat();
+                cls.ranged_damage = fields[2].GetFloat();
+                cls.attack_power = fields[3].GetInt32();
+                cls.ranged_attack_power = fields[4].GetInt32();
+                cls.health = fields[5].GetInt32();
+                cls.base_health = fields[6].GetInt32();
+                cls.mana = fields[7].GetInt32();
+                cls.base_mana = fields[8].GetInt32();
+                cls.strength = fields[9].GetInt32();
+                cls.agility = fields[10].GetInt32();
+                cls.stamina = fields[11].GetInt32();
+                cls.intellect = fields[12].GetInt32();
+                cls.spirit = fields[13].GetInt32();
+                cls.armor = fields[14].GetInt32();
+
+                if (cls.melee_damage <= 0.0f)
+                {
+                    sLog.outErrorDb("Invalid `melee_damage` = %g in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.melee_damage = phMeleeDamage + phMeleeDamage * phDamageIncreasePerLevel * i;
+                }
+
+                if (cls.ranged_damage <= 0.0f)
+                {
+                    sLog.outErrorDb("Invalid `ranged_damage` = %g in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.ranged_damage = phRangedDamage + phRangedDamage * phDamageIncreasePerLevel * i;
+                }
+
+                if (cls.attack_power <= 0)
+                {
+                    sLog.outErrorDb("Invalid `attack_power` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.attack_power = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.ranged_attack_power <= 0)
+                {
+                    sLog.outErrorDb("Invalid `ranged_attack_power` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.ranged_attack_power = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.health <= 0)
+                {
+                    sLog.outErrorDb("Invalid `health` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.health = phStat * 2 + phStat * 2 * i;
+                }
+
+                if (cls.base_health <= 0)
+                {
+                    sLog.outErrorDb("Invalid `base_health` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.base_health = phStat + phStat * i;
+                }
+
+                if (cls.mana < 0)
+                {
+                    sLog.outErrorDb("Invalid `mana` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.mana = abs(cls.mana);
+                }
+
+                if (cls.base_mana < 0)
+                {
+                    sLog.outErrorDb("Invalid `base_mana` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.base_mana = abs(cls.base_mana);
+                }
+
+                if (cls.strength <= 0)
+                {
+                    sLog.outErrorDb("Invalid `strength` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.strength = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.agility <= 0)
+                {
+                    sLog.outErrorDb("Invalid `agility` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.agility = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.stamina <= 0)
+                {
+                    sLog.outErrorDb("Invalid `stamina` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.stamina = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.intellect <= 0)
+                {
+                    sLog.outErrorDb("Invalid `intellect` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.intellect = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.spirit <= 0)
+                {
+                    sLog.outErrorDb("Invalid `spirit` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.spirit = phStat + phStat * phStatIncreasePerLevel * i;
+                }
+
+                if (cls.armor < 0)
+                {
+                    sLog.outErrorDb("Invalid `armor` = %i in `creature_classlevelstats` for `class`=%u and `level`=%u!", cls.melee_damage, unitClass, level);
+                    cls.armor = abs(cls.armor);
+                }
+
+            } while (result->NextRow());
+        }
+
+        for (uint32 i = 0; i < currentMaxLevel; i++)
+        {
+            CreatureClassLevelStats& cls = m_CreatureCLSMap[unitClass][i];
+            if (!cls.health)
+            {
+                sLog.outErrorDb("Missing creature CLS data for `class` = %u and `level` = %u!", unitClass, i+1);
+                cls.melee_damage = phMeleeDamage + phMeleeDamage * phDamageIncreasePerLevel * i;
+                cls.ranged_damage = phRangedDamage + phRangedDamage * phDamageIncreasePerLevel * i;
+                cls.attack_power = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.ranged_attack_power = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.health = phStat * 2 + phStat * 2 * i;
+                cls.base_health = phStat + phStat * i;
+                cls.mana = phStat * 2 + phStat * 2 * i;
+                cls.base_mana = phStat + phStat * i;
+                cls.strength = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.agility = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.stamina = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.intellect = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.spirit = phStat + phStat * phStatIncreasePerLevel * i;
+                cls.armor = phArmorPerLevel * i;
+            }
+        }
+
+        if (currentMaxLevel < requiredMaxLevel)
+        {
+            CreatureClassLevelStats& penultimateLevelCls = m_CreatureCLSMap[unitClass][currentMaxLevel - 2];
+            CreatureClassLevelStats& maxLevelCls = m_CreatureCLSMap[unitClass][currentMaxLevel - 1];
+
+            float const meleeDamageIncreasePerLevel = std::max(1.03f, maxLevelCls.melee_damage / penultimateLevelCls.melee_damage);
+            float const rangedDamageIncreasePerLevel = std::max(1.03f, maxLevelCls.ranged_damage / penultimateLevelCls.ranged_damage);
+            float const attackPowerIncreasePerLevel = std::max(1.03f, float(maxLevelCls.attack_power) / float(penultimateLevelCls.attack_power));
+            float const rangedAttackPowerIncreasePerLevel = std::max(1.03f, float(maxLevelCls.ranged_attack_power) / float(penultimateLevelCls.ranged_attack_power));
+            float const healthIncreasePerLevel = std::max(1.03f, float(maxLevelCls.health) / float(penultimateLevelCls.health));
+            float const baseHealthIncreasePerLevel = std::max(1.03f, float(maxLevelCls.base_health) / float(penultimateLevelCls.base_health));
+            float const manaIncreasePerLevel = std::max(1.03f, float(maxLevelCls.mana) / float(penultimateLevelCls.mana));
+            float const baseManaIncreasePerLevel = std::max(1.03f, float(maxLevelCls.base_mana) / float(penultimateLevelCls.base_mana));
+            float const strengthIncreasePerLevel = std::max(1.03f, float(maxLevelCls.strength) / float(penultimateLevelCls.strength));
+            float const agilityIncreasePerLevel = std::max(1.03f, float(maxLevelCls.agility) / float(penultimateLevelCls.agility));
+            float const staminaIncreasePerLevel = std::max(1.03f, float(maxLevelCls.stamina) / float(penultimateLevelCls.stamina));
+            float const intellectIncreasePerLevel = std::max(1.03f, float(maxLevelCls.intellect) / float(penultimateLevelCls.intellect));
+            float const spiritIncreasePerLevel = std::max(1.03f, float(maxLevelCls.spirit) / float(penultimateLevelCls.spirit));
+            float const armorIncreasePerLevel = std::max(1.03f, float(maxLevelCls.armor) / float(penultimateLevelCls.armor));
+
+            for (uint32 i = currentMaxLevel; i < requiredMaxLevel; i++)
+            {
+                CreatureClassLevelStats& cls = m_CreatureCLSMap[unitClass][i];
+                if (!cls.health)
+                {
+                    cls.melee_damage = maxLevelCls.melee_damage * std::pow(meleeDamageIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.ranged_damage = maxLevelCls.ranged_damage * std::pow(rangedDamageIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.attack_power = maxLevelCls.attack_power * std::pow(attackPowerIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.ranged_attack_power = maxLevelCls.ranged_attack_power * std::pow(rangedAttackPowerIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.health = maxLevelCls.health * std::pow(healthIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.base_health = maxLevelCls.base_health * std::pow(baseHealthIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.mana = maxLevelCls.mana * std::pow(manaIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.base_mana = maxLevelCls.base_mana * std::pow(baseManaIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.strength = maxLevelCls.strength * std::pow(strengthIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.agility = maxLevelCls.agility * std::pow(agilityIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.stamina = maxLevelCls.stamina * std::pow(staminaIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.intellect = maxLevelCls.intellect * std::pow(intellectIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.spirit = maxLevelCls.spirit * std::pow(spiritIncreasePerLevel, 1 + (i - currentMaxLevel));
+                    cls.armor = maxLevelCls.armor * std::pow(armorIncreasePerLevel, 1 + (i - currentMaxLevel));
+                }
+            }
+        }
+    }
+}
+
+CreatureClassLevelStats const* ObjectMgr::GetCreatureClassLevelStats(uint32 unitClass, uint32 level) const
+{
+    auto itr = m_CreatureCLSMap.find(unitClass);
+    if (itr == m_CreatureCLSMap.end() || itr->second.empty())
+    {
+        sLog.outError("Missing creature CLS data for class = %u!", unitClass);
+        static CreatureClassLevelStats ph{ 1.5f, 1.3f, 20, 20, 40, 20, 40, 20, 20, 20, 20, 20, 20, 20 };
+        return &ph;
+    }
+
+    if (level > itr->second.size())
+        level = itr->second.size();
+
+    return &itr->second[level - 1];
+}
+
 void ObjectMgr::LoadCreatures(bool reload)
 {
     uint32 count = 0;
@@ -1921,14 +2218,14 @@ void ObjectMgr::LoadCreatures(bool reload)
                     break;
                 }
 
-                if ((cInfo->regeneration & REGEN_FLAG_HEALTH) && (cInfo->health_min > 0) && (curhealth < 100.0f) && !is_dead)
+                if ((cInfo->regeneration & REGEN_FLAG_HEALTH) && (curhealth < 100.0f) && !is_dead)
                 {
                     sLog.outErrorDb("Table `creature` have creature (GUID: %u Entry: %u) with REGEN_FLAG_HEALTH and low current health percent (%g%%).", guid, first_entry, curhealth);
                     sLog.out(LOG_DBERRFIX, "UPDATE `creature` SET `health_percent`=100 WHERE `guid`=%u AND `id`=%u;", guid, first_entry);
                     curhealth = 100.0f;
                 }
 
-                if ((cInfo->regeneration & REGEN_FLAG_POWER) && (cInfo->mana_min > 0) && (curmana < 100.0f))
+                if ((cInfo->regeneration & REGEN_FLAG_POWER) && (cInfo->unit_class != CLASS_WARRIOR) && (curmana < 100.0f))
                 {
                     sLog.outErrorDb("Table `creature` have creature (GUID: %u Entry: %u) with REGEN_FLAG_POWER and low current mana percent (%g%%).", guid, first_entry, curmana);
                     sLog.out(LOG_DBERRFIX, "UPDATE `creature` SET `mana_percent=100 WHERE `guid`=%u AND `id`=%u;", guid, first_entry);
@@ -3365,7 +3662,7 @@ void ObjectMgr::LoadItemPrototypes()
             continue;
 
         if ((obtainedItems.find(i) != obtainedItems.end()) ||
-            (proto->ExtraFlags & ITEM_EXTRA_MAIL_STATIONERY) ||
+            proto->HasExtraFlag(ITEM_EXTRA_MAIL_STATIONERY) ||
             !sWorld.getConfig(CONFIG_BOOL_PREVENT_ITEM_DATAMINING))
             proto->m_bDiscovered = true;
 
@@ -3765,8 +4062,7 @@ void ObjectMgr::LoadItemRequiredTarget()
         {
             if (SpellEntry const* pSpellInfo = sSpellMgr.GetSpellEntry(itr.SpellId))
             {
-                if (itr.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE ||
-                    itr.SpellTrigger == ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
+                if (itr.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
                 {
                     SpellScriptTargetBounds bounds = sSpellMgr.GetSpellScriptTargetBounds(pSpellInfo->Id);
                     if (bounds.first != bounds.second)
@@ -4794,8 +5090,8 @@ void ObjectMgr::LoadQuests()
                           "`IncompleteEmote`, `CompleteEmote`, `OfferRewardEmote1`, `OfferRewardEmote2`, `OfferRewardEmote3`, `OfferRewardEmote4`,"
     //                      119                       120                       121                       122
                           "`OfferRewardEmoteDelay1`, `OfferRewardEmoteDelay2`, `OfferRewardEmoteDelay3`, `OfferRewardEmoteDelay4`,"
-    //                      123            124               125         126             127      128
-                          "`StartScript`, `CompleteScript`, `MaxLevel`, `RewMailMoney`, `RewXP`, `RequiredCondition` "
+    //                      123            124               125         126             127      128                  129
+                          "`StartScript`, `CompleteScript`, `MaxLevel`, `RewMailMoney`, `RewXP`, `RequiredCondition`, `BreadcrumbForQuestId` "
                           " FROM `quest_template` t1 WHERE `patch`=(SELECT max(`patch`) FROM `quest_template` t2 WHERE t1.`entry`=t2.`entry` && `patch` <= %u)", sWorld.GetWowPatch()));
     if (!result)
     {
@@ -5343,8 +5639,11 @@ void ObjectMgr::LoadQuests()
         // fill additional data stores
         if (qinfo->PrevQuestId)
         {
-            if (m_QuestTemplatesMap.find(abs(qinfo->GetPrevQuestId())) == m_QuestTemplatesMap.end())
+            QuestMap::iterator qPrevItr = m_QuestTemplatesMap.find(abs(qinfo->GetPrevQuestId()));
+            if (qPrevItr == m_QuestTemplatesMap.end())
                 sLog.outErrorDb("Quest %d has PrevQuestId %i, but no such quest", qinfo->GetQuestId(), qinfo->GetPrevQuestId());
+            else if (qPrevItr->second->BreadcrumbForQuestId)
+                sLog.outErrorDb("Quest %d should not be unlocked by breadcrumb quest %u", qinfo->GetQuestId(), qinfo->GetPrevQuestId());
             else
                 qinfo->prevQuests.push_back(qinfo->PrevQuestId);
         }
@@ -5366,6 +5665,50 @@ void ObjectMgr::LoadQuests()
 
         if (qinfo->LimitTime)
             qinfo->SetSpecialFlag(QUEST_SPECIAL_FLAG_TIMED);
+
+        if (uint32 breadcrumbQuestId = qinfo->BreadcrumbForQuestId)
+        {
+            QuestMap::iterator qBreadcrumbQuestItr = m_QuestTemplatesMap.find(breadcrumbQuestId);
+            if (qBreadcrumbQuestItr == m_QuestTemplatesMap.end())
+            {
+                sLog.outErrorDb("Quest %u has BreadcrumbForQuestId %u, but there is no such quest", qinfo->GetQuestId(), breadcrumbQuestId);
+                qinfo->BreadcrumbForQuestId = 0;
+            }
+            else
+            {
+                if (qinfo->NextQuestId)
+                    sLog.outErrorDb("Quest %u is a breadcrumb, it should not unlock quest %d", qinfo->GetQuestId(), qinfo->NextQuestId);
+                if (qinfo->ExclusiveGroup)
+                    sLog.outErrorDb("Quest %u is a breadcrumb, it should not be in exclusive group %d", qinfo->GetQuestId(), qinfo->ExclusiveGroup);
+            }
+        }
+    }
+
+    // Prevent any breadcrumb loops, and inform target quests of their breadcrumbs
+    for (auto const& itr : m_QuestTemplatesMap)
+    {
+        Quest* qinfo = itr.second.get();
+        uint32   qid = qinfo->GetQuestId();
+        uint32 breadcrumbForQuestId = qinfo->BreadcrumbForQuestId;
+        std::set<uint32> questSet;
+
+        while (breadcrumbForQuestId)
+        {
+            // If the insertion fails, then we already processed this breadcrumb quest in this iteration. This means that two breadcrumb quests have each other set as targets
+            if (!questSet.insert(qinfo->QuestId).second)
+            {
+                sLog.outErrorDb("Breadcrumb quests %u and %u are in a loop!", qid, breadcrumbForQuestId);
+                qinfo->BreadcrumbForQuestId = 0;
+                break;
+            }
+
+            qinfo = const_cast<Quest*>(sObjectMgr.GetQuestTemplate(breadcrumbForQuestId));
+
+            // Every quest has a list of breadcrumb quests that point toward it
+            qinfo->DependentBreadcrumbQuests.push_back(qid);
+
+            breadcrumbForQuestId = qinfo->GetBreadcrumbForQuestId();
+        }
     }
 
     // check QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT for spell with SPELL_EFFECT_QUEST_COMPLETE
@@ -8274,7 +8617,7 @@ ObjectGuid ObjectMgr::GetFullTransportGuidFromLowGuid(uint32 lowGuid)
     {
         if (GameObjectInfo const* pInfo = GetGameObjectInfo(data->id))
             if (pInfo->type == GAMEOBJECT_TYPE_TRANSPORT)
-                guid = ObjectGuid(HIGHGUID_GAMEOBJECT, data->id, lowGuid);
+                guid = ObjectGuid(HIGHGUID_TRANSPORT, data->id, lowGuid);
     }
 
     return guid;

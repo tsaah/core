@@ -325,8 +325,8 @@ class WorldSession
 
         // Bot system
         std::stringstream m_chatBotHistory;
-        PlayerBotEntry* GetBot() { return m_bot; }
-        void SetBot(PlayerBotEntry* b) { m_bot = b; }
+        PlayerBotEntry* GetBot() { return m_bot.get(); }
+        void SetBot(std::shared_ptr<PlayerBotEntry> const& b) { m_bot = b; }
 
         // Warden / Anticheat
         void InitWarden(BigNumber* K);
@@ -336,6 +336,7 @@ class WorldSession
         void ProcessAnticheatAction(char const* detector, char const* reason, uint32 action, uint32 banTime = 0 /* Perm ban */);
         uint32 GetFingerprint() const { return 0; } // TODO
         void CleanupFingerprintHistory() {} // TODO
+        bool HasClientMovementControl() const { return !m_clientMoverGuid.IsEmpty(); }
         
         void SetReceivedWhoRequest(bool v) { m_who_recvd = v; }
         bool ReceivedWhoRequest() const { return m_who_recvd; }
@@ -428,7 +429,6 @@ class WorldSession
         AuctionHouseEntry const* GetCheckedAuctionHouseForAuctioneer(ObjectGuid guid);
 
         // Item Enchantment
-        void SendEnchantmentLog(ObjectGuid targetGuid, ObjectGuid casterGuid, uint32 itemId, uint32 spellId);
         void SendItemEnchantTimeUpdate(ObjectGuid playerGuid, ObjectGuid itemGuid, uint32 slot, uint32 duration);
 
         // Taxi
@@ -816,7 +816,7 @@ class WorldSession
         int m_sessionDbLocaleIndex;
         ClientOSType    m_clientOS;
         uint32          m_gameBuild;
-        PlayerBotEntry* m_bot;
+        std::shared_ptr<PlayerBotEntry> m_bot;
 
         Warden* m_warden;
         MovementAnticheat* m_cheatData;

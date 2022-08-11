@@ -47,33 +47,10 @@ void AddItemsSetItem(Player* player, Item* item)
         return;
 #endif
 
-    ItemSetEffect* eff = nullptr;
-
-    for (const auto& x : player->m_ItemSetEff)
-    {
-        if (x && x->setid == setid)
-        {
-            eff = x;
-            break;
-        }
-    }
+    ItemSetEffect* eff = player->GetItemSetEffect(setid);
 
     if (!eff)
-    {
-        eff = new ItemSetEffect;
-        memset(eff, 0, sizeof(ItemSetEffect));
-        eff->setid = setid;
-
-        size_t x = 0;
-        for (; x < player->m_ItemSetEff.size(); x++)
-            if (!player->m_ItemSetEff[x])
-                break;
-
-        if (x < player->m_ItemSetEff.size())
-            player->m_ItemSetEff[x] = eff;
-        else
-            player->m_ItemSetEff.push_back(eff);
-    }
+        eff = player->AddItemSetEffect(setid);
 
     ++eff->item_count;
 
@@ -126,16 +103,7 @@ void RemoveItemsSetItem(Player* player, ItemPrototype const* proto)
         return;
     }
 
-    ItemSetEffect* eff = nullptr;
-    size_t setindex = 0;
-    for (; setindex < player->m_ItemSetEff.size(); setindex++)
-    {
-        if (player->m_ItemSetEff[setindex] && player->m_ItemSetEff[setindex]->setid == setid)
-        {
-            eff = player->m_ItemSetEff[setindex];
-            break;
-        }
-    }
+    ItemSetEffect* eff = player->GetItemSetEffect(setid);
 
     // can be in case now enough skill requirement for set appling but set has been appliend when skill requirement not enough
     if (!eff)
@@ -165,11 +133,7 @@ void RemoveItemsSetItem(Player* player, ItemPrototype const* proto)
     }
 
     if (!eff->item_count)                                    // all items of a set were removed
-    {
-        MANGOS_ASSERT(eff == player->m_ItemSetEff[setindex]);
-        delete eff;
-        player->m_ItemSetEff[setindex] = nullptr;
-    }
+        player->RemoveItemSetEffect(setid);
 }
 
 bool ItemCanGoIntoBag(ItemPrototype const* pProto, ItemPrototype const* pBagProto)
@@ -1045,11 +1009,24 @@ bool Item::IsTargetValidForItemUse(Unit* pUnitTarget)
     return false;
 }
 
-void Item::SetEnchantment(EnchantmentSlot slot, uint32 id, uint32 duration, uint32 charges)
+void Item::SetEnchantment(EnchantmentSlot slot, uint32 id, uint32 duration, uint32 charges, ObjectGuid casterGuid /*= ObjectGuid()*/)
 {
     // Better lost small time at check in comparison lost time at item save to DB.
     if ((GetEnchantmentId(slot) == id) && (GetEnchantmentDuration(slot) == duration) && (GetEnchantmentCharges(slot) == charges))
         return;
+
+    
+    if (slot < MAX_INSPECTED_ENCHANTMENT_SLOT && !casterGuid.IsEmpty())
+    {
+        if (Player* owner = GetOwner())
+        {
+            if (uint32 oldEnchant = GetEnchantmentId(slot))
+                owner->SendEnchantmentLog(ObjectGuid(), GetEntry(), oldEnchant);
+
+            if (id)
+                owner->SendEnchantmentLog(casterGuid, GetEntry(), id);
+        }
+    }
 
     SetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_ID_OFFSET, id);
     SetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_DURATION_OFFSET, duration);
@@ -1075,10 +1052,16 @@ void Item::SetEnchantmentCharges(EnchantmentSlot slot, uint32 charges)
     SetState(ITEM_CHANGED);
 }
 
-void Item::ClearEnchantment(EnchantmentSlot slot)
+void Item::ClearEnchantment(EnchantmentSlot slot, bool sendToClient)
 {
     if (!GetEnchantmentId(slot))
         return;
+
+    if (slot < MAX_INSPECTED_ENCHANTMENT_SLOT && sendToClient)
+    {
+        if (Player* owner = GetOwner())
+            owner->SendEnchantmentLog(ObjectGuid(), GetEntry(), GetEnchantmentId(slot));
+    }
 
     for (uint8 x = 0; x < 3; ++x)
         SetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + x, 0);

@@ -1134,7 +1134,7 @@ void Aura::TriggerSpell()
                         }
                         // remove old enchanting before applying new
                         ((Player*)triggerTarget)->ApplyEnchantment(item, TEMP_ENCHANTMENT_SLOT, false);
-                        item->SetEnchantment(TEMP_ENCHANTMENT_SLOT, enchant_id, m_modifier.periodictime + 1000, 0);
+                        item->SetEnchantment(TEMP_ENCHANTMENT_SLOT, enchant_id, m_modifier.periodictime + 1000, 0, triggerTarget->GetObjectGuid());
                         // add new enchanting
                         ((Player*)triggerTarget)->ApplyEnchantment(item, TEMP_ENCHANTMENT_SLOT, true);
                         return;
@@ -1713,6 +1713,22 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         }
                         return;
                     }
+                    case 12623:                             // Suppression
+                    {
+                        if (Creature* pCreature = target->ToCreature())
+                        {
+                            // Using script command to avoid including EventAI header.
+                            ScriptInfo si;
+                            si.command = SCRIPT_COMMAND_SET_PHASE;
+                            si.setPhase.phase = 1;
+                            if (apply)
+                                si.setPhase.mode = SO_SETPHASE_INCREMENT;
+                            else
+                                si.setPhase.mode = SO_SETPHASE_DECREMENT;
+                            pCreature->GetMap()->ScriptCommandStartDirect(si, pCreature, pCreature);
+                        }
+                        return;
+                    }
                     case 13139:                             // net-o-matic
                     {
                         // root to self part of (root_target->charge->root_self sequence
@@ -1733,10 +1749,18 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         }
                         return;
                     }
+                    case 7057:  // Haunting Spirits
                     case 16336: // Haunting Phantoms
                     {
                         m_isPeriodic = true;
-                        m_modifier.periodictime = urand(30, 90) * IN_MILLISECONDS;
+                        m_modifier.periodictime = 5 * IN_MILLISECONDS; // expected to tick with 5 sec period
+                        return;
+                    }
+                    case 21827: // Frostwolf Aura DND
+                    case 21863: // Alterac Ram Aura DND
+                    {
+                        m_isPeriodic = true;
+                        m_modifier.periodictime = 2 * IN_MILLISECONDS;
                         return;
                     }
                     case 26234:                             // Ragnaros Submerge Visual
@@ -1930,6 +1954,16 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                                 }
                             }
                         }
+                }
+                return;
+            }
+            case 21827:                                     // Frostwolf Aura DND
+            case 21863:                                     // Alterac Ram Aura DND
+            {
+                if (Creature* pCreature = ToCreature(GetCaster()))
+                {
+                    if (pCreature->IsAlive() && !pCreature->HasCreatureState(CSTATE_DESPAWNING))
+                        pCreature->DespawnOrUnsummon(2000);
                 }
                 return;
             }
@@ -2603,8 +2637,13 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
     HandleShapeshiftBoosts(apply);
     target->UpdateModelData();
 
-    if (target->GetTypeId() == TYPEID_PLAYER)
+    if (target->IsPlayer())
         ((Player*)target)->InitDataForForm();
+    else
+    {
+        target->UpdateSpeed(MOVE_WALK, false);
+        target->UpdateSpeed(MOVE_RUN, false);
+    }
 }
 
 void Aura::HandleAuraTransform(bool apply, bool Real)
@@ -2776,6 +2815,12 @@ void Aura::HandleAuraTransform(bool apply, bool Real)
                 }
             }
         }
+    }
+
+    if (target->IsCreature())
+    {
+        target->UpdateSpeed(MOVE_WALK, false);
+        target->UpdateSpeed(MOVE_RUN, false);
     }
 }
 
@@ -5292,14 +5337,22 @@ void Aura::HandleModDamageDone(bool apply, bool Real)
 void Aura::HandleModDamagePercentDone(bool apply, bool Real)
 {
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "AURA MOD DAMAGE type:%u negative:%u", m_modifier.m_miscvalue, m_positive ? 0 : 1);
+
     Unit* target = GetTarget();
 
     // apply item specific bonuses for already equipped weapon
-    if (Real && target->GetTypeId() == TYPEID_PLAYER)
+    if (Real)
     {
-        for (int i = 0; i < MAX_ATTACK; ++i)
-            if (Item* pItem = ((Player*)target)->GetWeaponForAttack(WeaponAttackType(i), true, false))
-                ((Player*)target)->_ApplyWeaponDependentAuraDamageMod(pItem, WeaponAttackType(i), this, apply);
+        if (Player* player = target->ToPlayer())
+        {
+            for (int i = 0; i < MAX_ATTACK; ++i)
+            {
+                if (Item* pItem = player->GetWeaponForAttack(WeaponAttackType(i), true, false))
+                {
+                    player->_ApplyWeaponDependentAuraDamageMod(pItem, WeaponAttackType(i), this, apply);
+                }
+            }
+        }
     }
 
     // m_modifier.m_miscvalue is bitmask of spell schools
@@ -5314,15 +5367,17 @@ void Aura::HandleModDamagePercentDone(bool apply, bool Real)
     if ((m_modifier.m_miscvalue & SPELL_SCHOOL_MASK_NORMAL) != 0)
     {
         // apply generic physical damage bonuses including wand case
-        if (GetSpellProto()->EquippedItemClass == -1 || target->GetTypeId() != TYPEID_PLAYER)
+        if (GetSpellProto()->EquippedItemClass == -1 || !target->IsPlayer())
         {
             target->HandleStatModifier(UNIT_MOD_DAMAGE_MAINHAND, TOTAL_PCT, m_modifier.m_amount, apply);
             target->HandleStatModifier(UNIT_MOD_DAMAGE_OFFHAND, TOTAL_PCT, m_modifier.m_amount, apply);
             target->HandleStatModifier(UNIT_MOD_DAMAGE_RANGED, TOTAL_PCT, m_modifier.m_amount, apply);
 
             // For show in client
-            if (target->GetTypeId() == TYPEID_PLAYER)
+            if (target->IsPlayer())
+            {
                 target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT, m_modifier.m_amount / 100.0f, apply);
+            }
         }
         else
         {
@@ -5345,9 +5400,16 @@ void Aura::HandleModDamagePercentDone(bool apply, bool Real)
 
     // Magic damage percent modifiers implemented in Unit::SpellDamageBonusDone
     // Send info to client
-    if (target->GetTypeId() == TYPEID_PLAYER)
+    if (target->IsPlayer())
+    {
         for (int i = SPELL_SCHOOL_HOLY; i < MAX_SPELL_SCHOOL; ++i)
-            target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + i, m_modifier.m_amount / 100.0f, apply);
+        {
+            if (m_modifier.m_miscvalue & (1 << i)) // make sure current spell school is actually included
+            {
+                target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + i, m_modifier.m_amount / 100.0f, apply);
+            }
+        }
+    }
 }
 
 void Aura::HandleModOffhandDamagePercent(bool apply, bool Real)
@@ -6372,15 +6434,51 @@ void Aura::PeriodicDummyTick()
                     return;
                 }
                 case 7057:                                  // Haunting Spirits
-                    if (roll_chance_i(33))
-                        target->CastSpell(target, m_modifier.m_amount, true, nullptr, this);
+                {
+                    if (roll_chance_i(5))
+                    {
+                        target->CastSpell(target, 7067, true, nullptr, this); // Summon Haunting Spirit
+                    }
                     return;
+                }
                 case 16336:                                 // Haunting Phantoms
                 {
-                    if (urand(0,1))
-                        target->CastSpell(target, 16334, true); // Summon Spiteful Phantom
-                    else
-                        target->CastSpell(target, 16335, true); // Summon Wrath Phantom
+                    if (roll_chance_i(5))
+                    {
+                        if (urand(0, 1))
+                            target->CastSpell(target, 16334, true); // Summon Spiteful Phantom
+                        else
+                            target->CastSpell(target, 16335, true); // Summon Wrath Phantom
+                    }
+                    return;
+                }
+                case 21827:                                 // Frostwolf Aura DND
+                case 21863:                                 // Alterac Ram Aura DND
+                {
+                    if (Player* pPlayer = target->ToPlayer())
+                    {
+                        if (Creature* pRam = ToCreature(GetCaster()))
+                        {
+                            if (pPlayer->IsDead() || pRam->IsDead() ||
+                               !pRam->IsWithinDistInMap(pPlayer, 50.0f))
+                            {
+                                pRam->DespawnOrUnsummon(1000);
+                                GetHolder()->SetAuraDuration(1);
+                                return;
+                            }
+
+                            switch (pRam->GetMotionMaster()->GetCurrentMovementGeneratorType())
+                            {
+                                case IDLE_MOTION_TYPE:
+                                case RANDOM_MOTION_TYPE:
+                                case WAYPOINT_MOTION_TYPE:
+                                    pRam->GetMotionMaster()->MoveFollow(pPlayer, 3.0f, 0);
+                                    break;
+                            }
+                        }
+                        else // ram is gone somehow
+                            GetHolder()->SetAuraDuration(1);  
+                    }
                     return;
                 }
                 case 24596:                                 // Intoxicating Venom
@@ -7400,14 +7498,15 @@ void SpellAuraHolder::SetAuraFlag(uint32 slot, bool add)
     {
         uint32 flags = AFLAG_NONE;
 
-        if (IsPositive())
-        {
-            if (!m_spellProto->HasAttribute(SPELL_ATTR_CANT_CANCEL))
-                flags |= AFLAG_CANCELABLE;
-            flags |= AFLAG_UNK3;
-        }
-        else
-            flags |= AFLAG_UNK4;
+        if (IsPositive() && !m_spellProto->HasAttribute(SPELL_ATTR_CANT_CANCEL))
+            flags |= AFLAG_CANCELABLE;
+
+        if (GetAuraByEffectIndex(EFFECT_INDEX_0))
+            flags |= AFLAG_EFF_INDEX_0;
+        if (GetAuraByEffectIndex(EFFECT_INDEX_1))
+            flags |= AFLAG_EFF_INDEX_1;
+        if (GetAuraByEffectIndex(EFFECT_INDEX_2))
+            flags |= AFLAG_EFF_INDEX_2;
 
         val |= (flags << byte);
     }

@@ -731,9 +731,9 @@ void Group::SendLootStartRoll(uint32 CountDown, Roll const& r)
 void Group::SendLootRoll(ObjectGuid const& targetGuid, uint8 rollNumber, uint8 rollType, Roll const& r)
 {
     WorldPacket data(SMSG_LOOT_ROLL, (8 + 4 + 8 + 4 + 4 + 4 + 1 + 1));
-    data << r.lootedTargetGUID;                             // creature guid what we're looting
-    data << uint32(r.itemSlot);                             // unknown, maybe amount of players, or item slot in loot
-    data << targetGuid;
+    data << r.lootedTargetGUID;                             // creature guid that we're looting
+    data << uint32(r.itemSlot);
+    data << targetGuid;                                     // player guid
     data << uint32(r.itemid);                               // the itemEntryId for the item that shall be rolled for
     data << uint32(0);                                      // randomSuffix - not used?
     data << uint32(r.itemRandomPropId);                     // Item random property ID
@@ -1495,7 +1495,7 @@ bool Group::_addMember(ObjectGuid guid, char const* name, bool isAssistant, uint
                 player->m_InstanceValid = true;
     }
 
-    if (!isBGGroup() && !(player && player->IsBot()))
+    if (!isBGGroup() && !(player && player->IsSavingDisabled()))
     {
         // insert into group table
         CharacterDatabase.PExecute("INSERT INTO `group_member` (`group_id`, `member_guid`, `assistant`, `subgroup`) VALUES('%u','%u','%u','%u')",

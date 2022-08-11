@@ -90,7 +90,7 @@ WorldSession::~WorldSession()
 {
     ///- unload player if not unloaded
     if (_player)
-        LogoutPlayer(true);
+        LogoutPlayer(!m_bot || sPlayerBotMgr.IsSavingAllowed());
 
     /// - If have unclosed socket, close it
     if (m_socket)
@@ -252,14 +252,22 @@ void WorldSession::LogUnprocessedTail(WorldPacket* packet)
 
 bool WorldSession::ForcePlayerLogoutDelay()
 {
-    if (!sWorld.IsStopped() && GetPlayer() && GetPlayer()->FindMap() && GetPlayer()->IsInWorld() && sWorld.getConfig(CONFIG_BOOL_FORCE_LOGOUT_DELAY))
+    if (!sWorld.IsStopped() && GetPlayer() && GetPlayer()->FindMap() && GetPlayer()->IsInWorld())
     {
-        sLog.out(LOG_CHAR, "Account: %d (IP: %s) Lost socket for character:[%s] (guid: %u)", GetAccountId(), GetRemoteAddress().c_str(), _player->GetName() , _player->GetGUIDLow());
-        sWorld.LogCharacter(GetPlayer(), "LostSocket");
-        GetPlayer()->OnDisconnected();
-        SetDisconnectedSession();
-        m_disconnectTimer = 120000;
-        return true;
+        if (GetBot())
+        {
+            GetPlayer()->RemoveFromGroup();
+        }
+        else if (sWorld.getConfig(CONFIG_BOOL_FORCE_LOGOUT_DELAY))
+        {
+            sLog.out(LOG_CHAR, "Account: %d (IP: %s) Lost socket for character:[%s] (guid: %u)", GetAccountId(), GetRemoteAddress().c_str(), _player->GetName(), _player->GetGUIDLow());
+            sWorld.LogCharacter(GetPlayer(), "LostSocket");
+            GetPlayer()->OnDisconnected();
+            GetPlayer()->SaveToDB();
+            SetDisconnectedSession();
+            m_disconnectTimer = 120000;
+            return true;
+        }
     }
     return false;
 }
@@ -291,7 +299,7 @@ bool WorldSession::Update(PacketFilter& updater)
     {
         if (m_bot != nullptr && m_bot->state == PB_STATE_OFFLINE)
         {
-            LogoutPlayer(true);
+            LogoutPlayer(sPlayerBotMgr.IsSavingAllowed());
             return false;
         }
 
@@ -657,6 +665,8 @@ void WorldSession::KickPlayer()
 {
     if (m_socket)
         m_socket->CloseSocket();
+    else if (m_bot)
+        m_bot->requestRemoval = true;
 }
 
 /// Cancel channeling handler

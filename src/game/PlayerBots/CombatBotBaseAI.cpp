@@ -8,6 +8,7 @@
 #include "WorldPacket.h"
 #include "Spell.h"
 #include "SpellAuras.h"
+#include "CharacterDatabaseCache.h"
 
 enum CombatBotSpells
 {
@@ -28,6 +29,8 @@ enum CombatBotSpells
     SPELL_SUMMON_FELHUNTER = 691,
     SPELL_SUMMON_SUCCUBUS = 712,
     SPELL_TAME_BEAST = 13481,
+    SPELL_REVIVE_PET = 982,
+    SPELL_CALL_PET = 883,
 
     PET_WOLF    = 565,
     PET_CAT     = 681,
@@ -1657,6 +1660,12 @@ void CombatBotBaseAI::PopulateSpellData()
                         m_spells.druid.pThorns->Id < pSpellEntry->Id)
                         m_spells.druid.pThorns = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Remove Curse") != std::string::npos)
+                {
+                    if (!m_spells.druid.pRemoveCurse ||
+                        m_spells.druid.pRemoveCurse->Id < pSpellEntry->Id)
+                        m_spells.druid.pRemoveCurse = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Cure Poison") != std::string::npos)
                 {
                     if (!m_spells.druid.pCurePoison ||
@@ -2324,8 +2333,9 @@ bool CombatBotBaseAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const*
                     if (!friendly_dispel && !positive && holder->GetSpellProto()->IsCharmSpell())
                         if (CharmInfo *charm = pTarget->GetCharmInfo())
                             if (FactionTemplateEntry const* ft = charm->GetOriginalFactionTemplate())
-                                if (charm->GetOriginalFactionTemplate()->IsFriendlyTo(*me->GetFactionTemplateEntry()))
-                                    bFoundOneDispell = true;
+                                if (FactionTemplateEntry const* ft2 = me->GetFactionTemplateEntry())
+                                    if (charm->GetOriginalFactionTemplate()->IsFriendlyTo(*ft2))
+                                        bFoundOneDispell = true;
                     if (positive == friendly_dispel)
                         continue;
                 }
@@ -2433,11 +2443,24 @@ void CombatBotBaseAI::SummonPetIfNeeded()
 {
     if (me->GetClass() == CLASS_HUNTER)
     {
-        if (me->GetPetGuid())
+        if (me->GetCharmGuid())
             return;
 
         if (me->GetLevel() < 10)
             return;
+
+        if (me->GetPetGuid() || sCharacterDatabaseCache.GetCharacterPetByOwner(me->GetGUIDLow()))
+        {
+            if (Pet* pPet = me->GetPet())
+            {
+                if (!pPet->IsAlive())
+                    me->CastSpell(pPet, SPELL_REVIVE_PET, true);
+            }
+            else
+                me->CastSpell(me, SPELL_CALL_PET, true);
+
+            return;
+        }
 
         uint32 petId = PickRandomValue( PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
                                         PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
@@ -2452,7 +2475,7 @@ void CombatBotBaseAI::SummonPetIfNeeded()
     }
     else if (me->GetClass() == CLASS_WARLOCK)
     {
-        if (me->GetPetGuid())
+        if (me->GetPetGuid() || me->GetCharmGuid())
             return;
 
         std::vector<uint32> vSummons;
@@ -2622,7 +2645,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
             continue;
 
         // Skip unobtainable items
-        if (pProto->ExtraFlags & ITEM_EXTRA_NOT_OBTAINABLE)
+        if (pProto->HasExtraFlag(ITEM_EXTRA_NOT_OBTAINABLE))
             continue;
 
         // Only gear and weapons
@@ -2841,7 +2864,7 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
 
     if ((result == SPELL_FAILED_MOVING ||
         result == SPELL_CAST_OK) &&
-        (pSpellEntry->GetCastTime() > 0) &&
+        (pSpellEntry->GetCastTime(me) > 0) &&
         (me->IsMoving() || !me->IsStopped()))
         me->StopMoving();
 

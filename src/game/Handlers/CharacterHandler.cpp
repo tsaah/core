@@ -43,7 +43,7 @@
 #include "Anticheat.h"
 #include "MasterPlayer.h"
 #include "PlayerBroadcaster.h"
-
+#include "PlayerBotMgr.h"
 
 class LoginQueryHolder : public SqlQueryHolder
 {
@@ -301,12 +301,12 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recv_data)
 
     if (!AllowTwoSideAccounts)
     {
-        std::list<PlayerCacheData*> characters;
+        std::list<PlayerCacheData const*> characters;
         sObjectMgr.GetPlayerDataForAccount(GetAccountId(), characters);
 
         if (!characters.empty())
         {
-            PlayerCacheData* cData = characters.front();
+            PlayerCacheData const* cData = characters.front();
             Team team_ = Player::TeamForRace(race_);
 
             uint8 acc_race = cData->uiRace;
@@ -491,6 +491,9 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
         }
         pCurrChar = new Player(this);
         pCurrChar->GetMotionMaster()->Initialize();
+
+        if (GetBot() && !sPlayerBotMgr.IsSavingAllowed())
+            pCurrChar->m_saveDisabled = true;
     }
 
     // "GetAccountId()==db stored account id" checked in LoadFromDB (prevent login not own character using cheating tools)

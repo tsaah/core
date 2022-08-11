@@ -188,6 +188,17 @@ class MovementInfo
         void ChangeOrientation(float o) { pos.o = o; }
         void ChangePosition(float x, float y, float z, float o) { pos.x = x; pos.y = y; pos.z = z; pos.o = o; }
         void UpdateTime(uint32 _time) { stime = _time; }
+        void SetAsServerSide()
+        { 
+            uint32 const oldTime = stime;
+            stime = WorldTimer::getMSTime();
+
+            // Preserve order of server side packets.
+            if (oldTime >= stime)
+                stime = oldTime + 1;
+
+            ctime = 0; // Not a client packet. Pauses extrapolation.
+        }
 
         struct JumpInfo
         {
@@ -660,6 +671,13 @@ class WorldObject : public Object
         bool IsPositionValid() const;
         void UpdateGroundPositionZ(float x, float y, float &z) const;
         void UpdateAllowedPositionZ(float x, float y, float &z) const;
+
+        void MovePositionToFirstCollision(Position &pos, float dist, float angle);
+        void GetFirstCollisionPosition(Position&pos, float dist, float angle)
+        {
+            pos = GetPosition();
+            MovePositionToFirstCollision(pos, dist, angle);
+        }
 
         // Valeur de retour : false si aucun point correct trouve.
         bool GetRandomPoint(float x, float y, float z, float distance, float &rand_x, float &rand_y, float &rand_z) const;

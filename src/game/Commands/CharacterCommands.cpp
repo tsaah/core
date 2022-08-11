@@ -665,7 +665,11 @@ bool ChatHandler::HandleLevelUpCommand(char* args)
         if (pCreature->IsPet())
             ((Pet*)pCreature)->GivePetLevel(newlevel);
         else
+        {
             pCreature->SetLevel(newlevel);
+            pCreature->InitStatsForLevel();
+            pCreature->UpdateAllStats();
+        }     
 
         PSendSysMessage(LANG_YOU_CHANGE_LVL, pCreature->GetName(), newlevel);
     }
@@ -1513,8 +1517,10 @@ void ChatHandler::HandleCharacterDeletedRestoreHelper(DeletedInfo const& delInfo
         return;
     }
 
-    CharacterDatabase.PExecute("UPDATE `characters` SET `name`='%s', `account`='%u', `deleted_time`=NULL, `deleted_name`=NULL, `deleted_account`=NULL WHERE `deleted_time` IS NOT NULL AND `guid` = %u",
+    // use blocking query as we need to reload character into cache
+    CharacterDatabase.DirectPExecute("UPDATE `characters` SET `name`='%s', `account`='%u', `deleted_time`=NULL, `deleted_name`=NULL, `deleted_account`=NULL WHERE `deleted_time` IS NOT NULL AND `guid` = %u",
         delInfo.name.c_str(), delInfo.accountId, delInfo.lowguid);
+    sObjectMgr.LoadPlayerCacheData(delInfo.lowguid);
 }
 
 /**

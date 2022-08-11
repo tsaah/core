@@ -100,10 +100,15 @@ class Creature : public Unit
         void OnEnterCombat(Unit* pAttacker, bool notInCombat = false) override;
         void OnLeaveCombat() override;
         void RemoveAurasAtReset();
-        // En cas de modification "manuelle" des stats.
-        void ResetStats();
 
-        void SelectLevel(CreatureInfo const* cinfo, float percentHealth = 100.0f, float percentMana = 100.0f);
+        // Awful things used in awful scripts. TODO: remove
+        void ResetStats();
+        void GetDefaultDamageRange(float& dmgMin, float& dmgMax) const;
+        int32 GetDefaultArmor() const;
+
+        CreatureClassLevelStats const* GetClassLevelStats() const;
+        void SelectLevel(float percentHealth = 100.0f, float percentMana = 100.0f);
+        void InitStatsForLevel(float percentHealth = 100.0f, float percentMana = 100.0f);
         void LoadEquipment(uint32 equip_entry, bool force=false);
 
         bool HasStaticDBSpawnData() const;                  // listed in `creature` table and have fixed in DB guid
@@ -260,7 +265,7 @@ class Creature : public Unit
         void SetDeathState(DeathState s) override;                   // overwrite virtual Unit::SetDeathState
         bool FallGround();
 
-        bool LoadFromDB(uint32 guid, Map* map);
+        bool LoadFromDB(uint32 guid, Map* map, bool force = false);
         void SaveToDB();
                                                             // overwrited in Pet
         virtual void SaveToDB(uint32 mapid);
@@ -296,6 +301,8 @@ class Creature : public Unit
         void DoFlee();
         void DoFleeToGetAssistance();
         float GetFleeingSpeed() const;
+        float GetBaseWalkSpeedRate() const;
+        float GetBaseRunSpeedRate() const;
         void MoveAwayFromTarget(Unit* pTarget, float distance);
         void CallForHelp(float radius);
         void CallAssistance();
@@ -564,6 +571,7 @@ class Creature : public Unit
 
         bool CreateFromProto(uint32 guidlow, CreatureInfo const* cinfo, uint32 firstCreatureId, CreatureData const* data = nullptr, GameEventCreatureData const* eventData = nullptr);
         bool InitEntry(uint32 entry, CreatureData const* data = nullptr, CreatureDataAddon const* addon = nullptr, GameEventCreatureData const* eventData = nullptr);
+        void SetInitCreaturePowerType();
 
         uint32 m_groupLootTimer;                            // (msecs)timer used for group loot
         uint32 m_groupLootId;                               // used to find group which is looting corpse

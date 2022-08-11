@@ -126,6 +126,7 @@ struct SoundEntriesEntry
 };
 
 typedef std::unordered_map<uint32, CreatureSpellsList> CreatureSpellsMap;
+typedef std::unordered_map<uint32, std::vector<CreatureClassLevelStats>> CreatureCLSMap;
 
 typedef std::map<uint32/*player guid*/,uint32/*instance*/> CellCorpseSet;
 struct CellObjectGuids
@@ -428,7 +429,7 @@ struct PlayerCacheData
     float fOrientation;
     bool bInFlight;
 };
-typedef std::map<uint32 /*guid*/, PlayerCacheData*> PlayerCacheDataMap;
+typedef std::map<uint32 /*guid*/, PlayerCacheData> PlayerCacheDataMap;
 
 struct FactionChangeMountData
 {
@@ -492,6 +493,7 @@ enum PermVariables
     VAR_TOURNAMENT  = 30021,    // last quest completion time
     VAR_TOURN_GOES  = 30022,    // tournament was started already
     VAR_TOURN_OVER  = 30023,    // tournament is over
+    VAR_TOURN_WINNER = 30056,   // for gosssip menu condition
 
     // War Effort shared contributions
     VAR_WE_ALLIANCE_COPPER          = 30024,
@@ -627,6 +629,8 @@ class ObjectMgr
         }
 
         static ItemPrototype const* GetItemPrototype(uint32 id) { return sItemStorage.LookupEntry<ItemPrototype>(id); }
+
+        CreatureClassLevelStats const* GetCreatureClassLevelStats(uint32 unitClass, uint32 level) const;
 
         PetLevelInfo const* GetPetLevelInfo(uint32 creature_id, uint32 level) const;
 
@@ -814,6 +818,7 @@ class ObjectMgr
         void LoadCreatureAddons();
         void LoadCreatureDisplayInfoAddon();
         void LoadCreatureSpells();
+        void LoadCreatureClassLevelStats();
         void LoadEquipmentTemplates();
         void LoadGameObjectLocales();
         void LoadGameobjects(bool reload = false);
@@ -1236,10 +1241,11 @@ class ObjectMgr
         SavedVariablesVector m_SavedVariables;
 
         // Caching Player Data
-        void LoadPlayerCacheData();
-        PlayerCacheData* GetPlayerDataByGUID(uint32 lowGuid) const;
-        PlayerCacheData* GetPlayerDataByName(std::string const& name) const;
-        void GetPlayerDataForAccount(uint32 accountId, std::list<PlayerCacheData*>& data) const;
+        void LoadPlayerCacheData(uint32 lowGuid = 0);
+        PlayerCacheData* GetPlayerDataByGUID(uint32 lowGuid);
+        PlayerCacheData const* GetPlayerDataByGUID(uint32 lowGuid) const;
+        PlayerCacheData const* GetPlayerDataByName(std::string const& name) const;
+        void GetPlayerDataForAccount(uint32 accountId, std::list<PlayerCacheData const*>& data) const;
         PlayerCacheData* InsertPlayerInCache(Player* pPlayer);
         PlayerCacheData* InsertPlayerInCache(uint32 lowGuid, uint32 race, uint32 _class, uint32 uiGender, uint32 account, std::string const& name, uint32 level, uint32 zoneId);
         void DeletePlayerFromCache(uint32 lowGuid);
@@ -1486,6 +1492,7 @@ class ObjectMgr
         CreatureDataMap m_CreatureDataMap;
         CreatureLocaleMap m_CreatureLocaleMap;
         CreatureSpellsMap m_CreatureSpellsMap;
+        CreatureCLSMap m_CreatureCLSMap;
         GameObjectDataMap m_GameObjectDataMap;
         GameObjectLocaleMap m_GameObjectLocaleMap;
         ItemLocaleMap m_ItemLocaleMap;
