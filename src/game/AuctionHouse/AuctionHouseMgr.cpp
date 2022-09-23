@@ -20,6 +20,7 @@
  */
 
 #include "AuctionHouseMgr.h"
+#include "AuctionHouseVendorBotMgr.h"
 #include "Database/DatabaseEnv.h"
 #include "DBCStores.h"
 #include "AccountMgr.h"
@@ -199,6 +200,8 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
 // call this method to send mail to auction owner, when auction is successful, it does not clear ram
 void AuctionHouseMgr::SendAuctionSuccessfulMail(AuctionEntry* auction)
 {
+    sAuctionHouseVendorBotMgr.onAuctionSuccessfull(auction);
+
     ObjectGuid owner_guid = ObjectGuid(HIGHGUID_PLAYER, auction->owner);
     Player* owner = sObjectMgr.GetPlayer(owner_guid);
 
@@ -246,6 +249,8 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
         sLog.outError("Auction item (GUID: %u) not found, and lost.", auction->itemGuidLow);
         return;
     }
+
+    sAuctionHouseVendorBotMgr.onAuctionExpired(auction);
 
     ObjectGuid owner_guid = ObjectGuid(HIGHGUID_PLAYER, auction->owner);
     Player* owner = sObjectMgr.GetPlayer(owner_guid);

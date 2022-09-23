@@ -77,6 +77,7 @@
 #include "PlayerBroadcaster.h"
 #include "CharacterDatabaseCache.h"
 #include "GameEventMgr.h"
+#include "AuctionHouseVendorBotMgr.h"
 #include "world/scourge_invasion.h"
 #include "world/world_event_wareffort.h"
 
@@ -11694,6 +11695,8 @@ void Player::AddItemToBuyBackSlot(Item* pItem, uint32 money, ObjectGuid vendorGu
     RemoveItemFromBuyBackSlot(slot, true);
     DEBUG_LOG("STORAGE: AddItemToBuyBackSlot item = %u, slot = %u", pItem->GetEntry(), slot);
 
+    sAuctionHouseVendorBotMgr.onItemAddedToBuyBack(this, pItem, money, vendorGuid);
+
     m_items[slot] = pItem;
     time_t base = time(nullptr);
     uint32 etime = uint32(base - m_loginTime + (30 * 3600));
@@ -11738,6 +11741,11 @@ void Player::RemoveItemFromBuyBackSlot(uint32 slot, bool del)
         Item* pItem = m_items[slot];
         if (pItem)
         {
+            if (del) {
+                sAuctionHouseVendorBotMgr.onItemDiscardedFromBuyBack(this, pItem);
+            } else {
+                sAuctionHouseVendorBotMgr.onItemBoughtBackFromBuyBack(this, pItem);
+            }
             pItem->RemoveFromWorld();
             if (del) pItem->SetState(ITEM_REMOVED, this);
         }
@@ -16866,6 +16874,9 @@ void Player::_SaveInventory()
     for (uint8 i = BUYBACK_SLOT_START; i < BUYBACK_SLOT_END; ++i)
     {
         Item* item = m_items[i];
+
+        if (item) { sAuctionHouseVendorBotMgr.onItemDiscardedFromBuyBack(this, item); }
+
         if (!item || item->GetState() == ITEM_NEW) continue;
 
         static SqlStatementID delInv ;
