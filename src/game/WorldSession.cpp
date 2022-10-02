@@ -47,6 +47,8 @@
 #include "Chat.h"
 #include "MasterPlayer.h"
 
+#include <openssl/md5.h>
+
 // select opcodes appropriate for processing in Map::Update context for current session state
 static bool MapSessionFilterHelper(WorldSession* session, OpcodeHandler const& opHandle)
 {
@@ -771,6 +773,124 @@ void WorldSession::SendAuthWaitQue(uint32 position)
         packet << uint32(position);
         SendPacket(&packet);
     }
+}
+
+void WorldSession::LoadGlobalAccountData()
+{
+    QueryResult* result = CharacterDatabase.PQuery("SELECT `type`, `time`, `data` FROM `account_data` WHERE `account`=%u", GetAccountId());
+    LoadAccountData(
+        result,
+        GLOBAL_CACHE_MASK
+    );
+    if (result)
+        delete result;
+}
+
+void WorldSession::LoadAccountData(QueryResult* result, uint32 mask)
+{
+    for (uint32 i = 0; i < NUM_ACCOUNT_DATA_TYPES; ++i)
+        if (mask & (1 << i))
+            m_accountData[i] = AccountData();
+
+    if (!result)
+        return;
+
+    do
+    {
+        Field* fields = result->Fetch();
+
+        uint32 type = fields[0].GetUInt32();
+        if (type >= NUM_ACCOUNT_DATA_TYPES)
+        {
+            sLog.outError("Table `%s` have invalid account data type (%u), ignore.",
+                mask == GLOBAL_CACHE_MASK ? "account_data" : "character_account_data", type);
+            continue;
+        }
+
+        if ((mask & (1 << type)) == 0)
+        {
+            sLog.outError("Table `%s` have non appropriate for table  account data type (%u), ignore.",
+                mask == GLOBAL_CACHE_MASK ? "account_data" : "character_account_data", type);
+            continue;
+        }
+
+        m_accountData[type].timestamp = time_t(fields[1].GetUInt64());
+        m_accountData[type].data = fields[2].GetCppString();
+    } while (result->NextRow());
+}
+
+void WorldSession::SetAccountData(AccountDataType type, const std::string& data)
+{
+    time_t const currentTime = time(nullptr);
+    if ((1 << type) & GLOBAL_CACHE_MASK)
+    {
+        uint32 acc = GetAccountId();
+
+        static SqlStatementID delId;
+        static SqlStatementID insId;
+
+        CharacterDatabase.BeginTransaction();
+
+        SqlStatement stmt = CharacterDatabase.CreateStatement(delId, "DELETE FROM `account_data` WHERE `account`=? AND `type`=?");
+        stmt.PExecute(acc, uint32(type));
+
+        if (!data.empty())
+        {
+            stmt = CharacterDatabase.CreateStatement(insId, "INSERT INTO `account_data` VALUES (?,?,?,?)");
+            stmt.PExecute(acc, uint32(type), uint64(currentTime), data.c_str());
+        }
+
+        CharacterDatabase.CommitTransaction();
+    }
+    else
+    {
+        // _player can be nullptr and packet received after logout but m_currentPlayerGuid still store correct guid
+        if (!m_currentPlayerGuid)
+            return;
+
+        static SqlStatementID delId;
+        static SqlStatementID insId;
+
+        CharacterDatabase.BeginTransaction();
+
+        SqlStatement stmt = CharacterDatabase.CreateStatement(delId, "DELETE FROM `character_account_data` WHERE `guid`=? AND `type`=?");
+        stmt.PExecute(m_currentPlayerGuid.GetCounter(), uint32(type));
+
+        if (!data.empty())
+        {
+            stmt = CharacterDatabase.CreateStatement(insId, "INSERT INTO `character_account_data` VALUES (?,?,?,?)");
+            stmt.PExecute(m_currentPlayerGuid.GetCounter(), uint32(type), uint64(currentTime), data.c_str());
+        }
+
+        CharacterDatabase.CommitTransaction();
+    }
+
+    m_accountData[type].timestamp = currentTime;
+    m_accountData[type].data = data;
+}
+
+void WorldSession::SendAccountDataTimes()
+{
+    WorldPacket data(SMSG_ACCOUNT_DATA_TIMES, NUM_ACCOUNT_DATA_TYPES * MD5_DIGEST_LENGTH);
+    for (AccountData const& itr : m_accountData)
+    {
+        if (itr.data.empty())
+        {
+            for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+                data << uint8(0);
+        }
+        else
+        {
+            MD5_CTX md5;
+            MD5_Init(&md5);
+            MD5_Update(&md5, itr.data.c_str(), itr.data.size());
+
+            uint8 fileHash[MD5_DIGEST_LENGTH];
+            MD5_Final(fileHash, &md5);
+            data.append(fileHash, MD5_DIGEST_LENGTH);
+        }
+    }
+    SendPacket(&data);
 }
 
 void WorldSession::LoadTutorialsData()
