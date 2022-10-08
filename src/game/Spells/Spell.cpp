@@ -1695,6 +1695,21 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
         return;
     }
 
+#ifdef USE_ACHIEVEMENTS
+
+    if (unit->GetTypeId() == TYPEID_PLAYER) {
+        unit->ToPlayer()->StartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_SPELL_TARGET, m_spellInfo->Id);
+        unit->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET, m_spellInfo->Id, 0, ToUnit(m_caster));
+        unit->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET2, m_spellInfo->Id, 0, ToUnit(m_caster));
+    }
+
+    if (m_caster->GetTypeId() == TYPEID_PLAYER) {
+        m_caster->ToPlayer()->StartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_SPELL_CASTER, m_spellInfo->Id);
+        m_caster->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL2, m_spellInfo->Id, 0, unit);
+    }
+
+#endif
+
     if (pRealCaster && pRealCaster != unit)
     {
         // Recheck  UNIT_FLAG_SPAWNING for delayed spells
@@ -3897,6 +3912,19 @@ void Spell::cast(bool skipCheck)
     // traded items have trade slot instead of guid in m_itemTargetGUID
     // set to real guid to be sent later to the client
     m_targets.updateTradeSlotItem();
+
+#ifdef USE_ACHIEVEMENTS
+
+    if (m_caster->GetTypeId() == TYPEID_PLAYER) {
+        if (m_CastItem) {
+            m_caster->ToPlayer()->StartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_ITEM, m_CastItem->GetEntry());
+            m_caster->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_ITEM, m_CastItem->GetEntry());
+        }
+
+        m_caster->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL, m_spellInfo->Id, 0, (m_targets.getUnitTarget() ? m_targets.getUnitTarget() : ToUnit(m_caster)));
+    }
+
+#endif
 
     FillTargetMap();
     if (m_channeled)

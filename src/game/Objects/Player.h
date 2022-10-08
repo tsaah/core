@@ -36,6 +36,12 @@
 #include "SpellMgr.h"
 #include "HonorMgr.h"
 
+#ifdef USE_ACHIEVEMENTS
+
+#include "Achievements/AchievementMgr.h"
+
+#endif
+
 #include <string>
 #include <vector>
 #include <functional>
@@ -710,6 +716,11 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOADMAILEDITEMS,
     PLAYER_LOGIN_QUERY_BATTLEGROUND_DATA,
     PLAYER_LOGIN_QUERY_FORGOTTEN_SKILLS,
+
+#ifdef USE_ACHIEVEMENTS
+    PLAYER_LOGIN_QUERY_LOADACHIEVEMENTS,
+    PLAYER_LOGIN_QUERY_LOAD_CRITERIA_PROGRESS,
+#endif
 
     MAX_PLAYER_LOGIN_QUERY
 };
@@ -2645,6 +2656,31 @@ class Player final: public Unit
         static uint32 GetRankFromDB(ObjectGuid guid);
         int GetGuildIdInvited() { return m_GuildIdInvited; }
         static void RemovePetitionsAndSigns(ObjectGuid guid);
+
+#ifdef USE_ACHIEVEMENTS
+public:
+    bool isHonorOrXPTarget(Unit* victim) const;
+    void UpdateAchievementCriteria(AchievementCriteriaTypes type,
+                                       uint32                   miscValue1 = 0,
+                                       uint32                   miscValue2 = 0,
+                                       Unit*                    unit = nullptr);
+
+    void CheckAllAchievementCriteria();
+    void ResetAchievements();
+    void SendRespondInspectAchievements(Player* player) const;
+    bool HasAchieved(uint32 achievementId) const;
+    void StartTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry, uint32 timeLost = 0);
+    void RemoveTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry);
+    void ResetAchievementCriteria(AchievementCriteriaCondition condition, uint32 value, bool evenIfCriteriaComplete = false);
+
+    void CompletedAchievement(AchievementEntry const* entry);
+
+    void UpdateLootAchievements(LootItem* item, Loot* loot);
+private:
+    AchievementMgr* m_achievementMgr;
+
+#endif
+
 };
 
 inline Player* Object::ToPlayer()

@@ -279,14 +279,29 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recv_data*/)
             for (const auto i : playersNear)
             {
                 i->LootMoney(money_per_player, pLoot);
+
+#ifdef USE_ACHIEVEMENTS
+
+                i->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, money_per_player);
+
+#endif
+
                 //Offset surely incorrect, but works
                 WorldPacket data(SMSG_LOOT_MONEY_NOTIFY, 4);
                 data << uint32(money_per_player);
                 i->GetSession()->SendPacket(&data);
             }
         }
-        else
+        else {
             player->LootMoney(pLoot->gold, pLoot);
+
+#ifdef USE_ACHIEVEMENTS
+
+            player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, pLoot->gold);
+
+#endif
+
+        }
 
         pLoot->gold = 0;
 
@@ -627,6 +642,13 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recv_data)
             target->GetShortDescription().c_str(), lootguid.GetString().c_str());
         target->SendNewItem(newitem, uint32(item.count), false, false, true);
         target->OnReceivedItem(newitem);
+   
+#ifdef USE_ACHIEVEMENTS
+
+        target->UpdateLootAchievements(&item, pLoot);
+
+#endif
+
     }
 
     // mark as looted

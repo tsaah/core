@@ -1117,6 +1117,13 @@ void Group::CountTheRoll(Rolls::iterator& rollI)
             LootItem* item = &(roll->getLoot()->items[roll->itemSlot]);
             if (player && player->GetSession())
             {
+
+#ifdef USE_ACHIEVEMENTS
+
+                player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_NEED_ON_LOOT, roll->itemid, maxresul);
+
+#endif
+
                 ItemPosCountVec dest;
                 InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, roll->itemid, item->count);
                 if (msg == EQUIP_ERR_OK)
@@ -1128,6 +1135,13 @@ void Group::CountTheRoll(Rolls::iterator& rollI)
                              player->GetShortDescription().c_str(), item->count, item->itemid, roll->lootedTargetGUID.GetString().c_str());
                     if (Item* newItem = player->StoreNewItem(dest, roll->itemid, true, item->randomPropertyId))
                         player->OnReceivedItem(newItem);
+
+#ifdef USE_ACHIEVEMENTS
+
+                    player->UpdateLootAchievements(item, roll->getLoot());
+
+#endif
+
                 }
                 else
                 {
@@ -1167,6 +1181,13 @@ void Group::CountTheRoll(Rolls::iterator& rollI)
 
             if (player && player->GetSession())
             {
+
+#ifdef USE_ACHIEVEMENTS
+
+                player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_GREED_ON_LOOT, roll->itemid, maxresul);
+
+#endif
+
                 ItemPosCountVec dest;
                 LootItem* item = &(roll->getLoot()->items[roll->itemSlot]);
                 InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, roll->itemid, item->count);
@@ -1179,6 +1200,13 @@ void Group::CountTheRoll(Rolls::iterator& rollI)
                              player->GetShortDescription().c_str(), item->count, item->itemid, roll->lootedTargetGUID.GetString().c_str());
                     if (Item* newItem = player->StoreNewItem(dest, roll->itemid, true, item->randomPropertyId))
                         player->OnReceivedItem(newItem);
+
+#ifdef USE_ACHIEVEMENTS
+
+                    player->UpdateLootAchievements(item, roll->getLoot());
+
+#endif
+
                 }
                 else
                 {

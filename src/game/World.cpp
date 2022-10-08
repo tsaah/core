@@ -82,6 +82,13 @@
 #include "GuardMgr.h"
 #include "TransportMgr.h"
 
+#if USE_ACHIEVEMENTS
+
+#include "Achievements/AchievementMgr.h"
+#include "Achievements/AchievementScriptMgr.h"
+
+#endif
+
 #include <chrono>
 
 INSTANTIATE_SINGLETON_1(World);
@@ -1550,6 +1557,27 @@ void World::SetInitialWorldSettings()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">>> Loot Tables loaded");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
 
+#ifdef USE_ACHIEVEMENTS
+
+    sAchievementStore.Load();
+    sAchievementCategoryStore.Load();
+    sAchievementCriteriaStore.Load();
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievements...");
+    sAchievementMgr->LoadAchievementReferenceList();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Criteria Lists...");
+    sAchievementMgr->LoadAchievementCriteriaList();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Criteria Data...");
+    sAchievementMgr->LoadAchievementCriteriaData();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Rewards...");
+    sAchievementMgr->LoadRewards();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Reward Locales...");
+    sAchievementMgr->LoadRewardLocales();
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Completed Achievements...");
+    sAchievementMgr->LoadCompletedAchievements();
+
+#endif
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Skill Fishing base level requirements...");
     sObjectMgr.LoadFishingBaseSkillLevel();
 
@@ -1646,6 +1674,13 @@ void World::SetInitialWorldSettings()
     sScriptMgr.LoadEventScripts();                          // must be after load Creature/Gameobject(Template/Data)
     sScriptMgr.LoadGenericScripts();
     sScriptMgr.LoadCreatureEventAIScripts();
+
+#ifdef USE_ACHIEVEMENTS
+
+    sAchievementScriptMgr->LoadDatabase();
+
+#endif
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">>> Scripts loaded");
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
 
@@ -1658,6 +1693,13 @@ void World::SetInitialWorldSettings()
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Initializing Scripts...");
     sScriptMgr.Initialize();
+
+#ifdef USE_ACHIEVEMENTS
+
+    sAchievementScriptMgr->Initialize();
+
+#endif
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading aura removal on map change definitions");

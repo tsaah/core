@@ -177,7 +177,7 @@ class ChatHandler
         void CheckIntegrity(ChatCommand *table, ChatCommand *parentCommand);
         void FillFullCommandsName(ChatCommand* table, std::string prefix);
         ChatCommand* getCommandTable();
-        
+
         bool HandleAnticheatCommand(char*);
         bool HandleReloadAnticheatCommand(char*);
         bool HandleViewLogCommand(char*);
@@ -464,7 +464,7 @@ class ChatHandler
         bool HandleDebugPlaySoundCommand(char* args);
         bool HandleDebugPlayScriptText(char* args);
         bool HandleDebugPlayMusicCommand(char* args);
-        
+
         bool HandleDebugSendBuyErrorCommand(char* args);
         bool HandleDebugSendChannelNotifyCommand(char* args);
         bool HandleDebugSendChatMsgCommand(char* args);
@@ -1072,6 +1072,14 @@ class ChatHandler
         std::string GenerateDeletedCharacterGUIDsWhereStr(DeletedInfoList::const_iterator& itr, DeletedInfoList::const_iterator const& itr_end);
         void HandleCharacterDeletedListHelper(DeletedInfoList const& foundList);
         void HandleCharacterDeletedRestoreHelper(DeletedInfo const& delInfo);
+
+#ifdef USE_ACHIEVEMENTS
+        bool HandleGetCategories(char* args);
+        bool HandleGerAchievements(char* args);
+        bool HandleGetCriteria(char* args);
+        bool HandleGetCharacterCriteria(char* args);
+        bool HandleGetCharacterAchuievements(char* args);
+#endif
 
         void SetSentErrorMessage(bool val){ sentErrorMessage = val;};
     private:

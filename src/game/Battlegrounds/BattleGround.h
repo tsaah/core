@@ -28,6 +28,12 @@
 #include "ByteBuffer.h"
 #include "ObjectGuid.h"
 
+#ifdef USE_ACHIEVEMENTS
+
+#include "SpellDefines.h"
+
+#endif
+
 // magic event-numbers
 #define BG_EVENT_NONE 255
 // those generic events should get a high event id
@@ -591,6 +597,11 @@ class BattleGround
         float m_teamStartLocO[BG_TEAMS_COUNT];
 
         uint32 m_playerSkinReflootId;
+
+#ifdef USE_ACHIEVEMENTS
+    public:
+        virtual bool AllNodesConrolledByTeam(TeamId teamId) const { return false; }
+#endif
 };
 
 // helper functions for world state list fill

@@ -644,6 +644,13 @@ void WorldSession::HandleSellItemOpcode(WorldPacket& recv_data)
     }
 
     _player->LogModifyMoney(money, "SellItem", pCreature->GetObjectGuid(), pItem->GetEntry());
+
+#ifdef USE_ACHIEVEMENTS
+
+    _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_MONEY_FROM_VENDORS, money);
+
+#endif
+
 }
 
 void WorldSession::HandleBuybackItem(WorldPacket& recv_data)
@@ -687,6 +694,13 @@ void WorldSession::HandleBuybackItem(WorldPacket& recv_data)
             _player->ModifyMoney(-(int32)price);
             _player->RemoveItemFromBuyBackSlot(slot, false);
             _player->ItemAddedQuestCheck(pItem->GetEntry(), pItem->GetCount());
+
+#ifdef USE_ACHIEVEMENTS
+
+            _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_RECEIVE_EPIC_ITEM, pItem->GetEntry(), pItem->GetCount());
+
+#endif
+
             _player->StoreItem(dest, pItem, true);
         }
         else
@@ -991,6 +1005,13 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPacket& recvPacket)
 
     _player->SetBankBagSlotCount(slot);
     _player->ModifyMoney(-int32(price));
+
+#ifdef USE_ACHIEVEMENTS
+
+    _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BUY_BANK_SLOT);
+
+#endif
+
 }
 
 void WorldSession::HandleAutoBankItemOpcode(WorldPacket& recvPacket)

@@ -1,0 +1,93 @@
+name: homebrew build
+
+on:
+  push:
+    branches: [ homebrew, hb-achievements ]
+    paths-ignore:
+      - 'sql/**'
+  pull_request:
+    branches: [ homebrew, hb-achievements ]
+    paths-ignore:
+      - 'sql/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VMANGOS_ARCHIVE_FILENAME: vmangos_artifacts.tar.xz
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: install dependencies
+      run: |
+        sudo apt-get -qq install libmysql++-dev libace-dev libtbb-dev
+        sudo apt-get -qq install cmake ccache build-essential git libiberty-dev openssl libssl-dev
+
+    # - name: build ace library
+    #   env:
+    #     ACE_VERSION: 7.0.5
+    #     ACE_VERSION2: 7_0_5
+    #   run: |
+    #     wget http://github.com/DOCGroup/ACE_TAO/releases/download/ACE%2BTAO-$ACE_VERSION2/ACE-$ACE_VERSION.tar.gz
+    #     tar xaf ACE-$ACE_VERSION.tar.gz
+    #     rm ACE-$ACE_VERSION.tar.gz
+    #     export ACE_ROOT=$GITHUB_WORKSPACE/ACE_wrappers
+    #     echo "#include \"ace/config-linux.h\"" >> $ACE_ROOT/ace/config.h
+    #     echo 'include $(ACE_ROOT)/include/makeinclude/platform_linux.GNU' >> $ACE_ROOT/include/makeinclude/platform_macros.GNU
+    #     echo "INSTALL_PREFIX = ${{github.workspace}}/acelib" >> $ACE_ROOT/include/makeinclude/platform_macros.GNU
+    #     cd $ACE_ROOT
+    #     make -j2
+    #     make install
+    #     cd ${{github.workspace}}
+    #     tar -cJf ace_${{env.ACE_VERSION}}.tar.xz ACE_wrappers
+    #     tar -cJf ace_libs_${{env.ACE_VERSION}}.tar.xz acelib
+    #   shell: bash
+
+    # - name: Archive ace artiacts
+    #   uses: actions/upload-artifact@v2
+    #   with:
+    #       name: ace-artifacts
+    #       path: "${{github.workspace}}/ace_*.tar.xz"
+
+    # - name: extract ace artifacts
+    #   run: |
+    #     wget https://wow.family-realm.ru/ace_7.0.5.tar.xz
+    #     tar xvaf ace_7.0.5.tar.xz
+    #   shell: bash
+
+    - name: build vmangos homebrew
+      env:
+        BUILDER_DEBUG_SYMBOLS: 0
+        BUILDER_USE_STD_MALLOC: 0
+        BUILDER_USE_EXTRACTORS: 1
+        BUILDER_USE_ANTICHEAT: 0
+        BUILDER_USE_SCRIPTS: 1
+        BUILDER_USE_LIBCURL: 0
+        BUILDER_USE_ACHIEVEMENTS: 1
+        BUILDER_SUPPORTED_CLIENT_BUILD: CLIENT_BUILD_1_12_1
+      run: |
+        export ACE_ROOT=$GITHUB_WORKSPACE/ACE_wrappers
+        mkdir build
+        mkdir artifacts
+        cmake -S $GITHUB_WORKSPACE -B $GITHUB_WORKSPACE/build -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_INSTALL_PREFIX=artifacts -DDEBUG_SYMBOLS=$BUILDER_DEBUG_SYMBOLS -DUSE_STD_MALLOC=$BUILDER_USE_STD_MALLOC -DUSE_EXTRACTORS=$BUILDER_USE_EXTRACTORS -DUSE_ANTICHEAT=$BUILDER_USE_ANTICHEAT -DUSE_SCRIPTS=$BUILDER_USE_SCRIPTS -DUSE_LIBCURL=$BUILDER_USE_LIBCURL -DUSE_ACHIEVEMENTS=$BUILDER_USE_ACHIEVEMENTS -DSUPPORTED_CLIENT_BUILD=$BUILDER_SUPPORTED_CLIENT_BUILD
+        cmake --build $GITHUB_WORKSPACE/build
+        cmake --install $GITHUB_WORKSPACE/build
+      shell: bash
+
+    - name: assemble sql cupdates
+      run: |
+        cd $GITHUB_WORKSPACE/sql/migrations
+        ./merge.sh
+        [ -f characters_db_updates.sql ] && cp characters_db_updates.sql $GITHUB_WORKSPACE/artifacts/
+        [ -f world_db_updates.sql ] && cp world_db_updates.sql $GITHUB_WORKSPACE/artifacts/
+        [ -f logs_db_updates.sql ] && cp logs_db_updates.sql $GITHUB_WORKSPACE/artifacts/
+        [ -f logon_db_updates.sql ] && cp logon_db_updates.sql $GITHUB_WORKSPACE/artifacts/
+      shell: bash
+
+    - name: Archive vmangos artiacts
+      uses: actions/upload-artifact@v2
+      with:
+          name: homebrew-vmangos-build-artifacts
+          path: "${{github.workspace}}/artifacts"
+

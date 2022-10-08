@@ -1092,7 +1092,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "",              SEC_TICKETMASTER,  true,  &ChatHandler::HandleGMTicketGetByIdOrNameCommand,    "", nullptr },
         { nullptr,         0,                 false, nullptr,                                             "", nullptr }
     };
-    
+
     static ChatCommand serviceCommandTable[] =
     {
         { "del_characters",     SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleServiceDeleteCharacters,   "", nullptr },
@@ -1121,6 +1121,17 @@ ChatCommand * ChatHandler::getCommandTable()
         { "remove",             SEC_BASIC_ADMIN,    false, &ChatHandler::HandleGoldRemoval,               "", nullptr },
         { nullptr,              0,                  false, nullptr,                                       "", nullptr }
     };
+
+#ifdef USE_ACHIEVEMENTS
+    static ChatCommand achievementsCommandTable[] = {
+        { "getCategoties",              SEC_PLAYER,         false, &ChatHandler::HandleGetCategories,             "", nullptr },
+        { "getAchievements",            SEC_PLAYER,         false, &ChatHandler::HandleGerAchievements,           "", nullptr },
+        { "getCriteria",                SEC_PLAYER,         false, &ChatHandler::HandleGetCriteria,               "", nullptr },
+        { "getCharacterCriteria",       SEC_PLAYER,         false, &ChatHandler::HandleGetCharacterCriteria,      "", nullptr },
+        { "getCharacterAchievements",   SEC_PLAYER,         false, &ChatHandler::HandleGetCharacterAchuievements, "", nullptr },
+        { nullptr,                      0,                  false, nullptr,                                       "", nullptr }
+    };
+#endif
 
     static ChatCommand commandTable[] =
     {
@@ -1251,8 +1262,13 @@ ChatCommand * ChatHandler::getCommandTable()
         { "spamer",         SEC_MODERATOR,      true, nullptr,                                         "", spamerCommandTable },
         { "antispam",       SEC_TICKETMASTER,   true, nullptr,                                         "", AntiSpamCommandTable },
         { "gold",           SEC_BASIC_ADMIN,    true, nullptr,                                         "", goldCommandTable },
+#ifdef USE_ACHIEVEMENTS
+        { "achievements",   SEC_PLAYER,         false, nullptr,                                        "", achievementsCommandTable  },
+#endif
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };
+
+
 
     if (load_command_table)
     {

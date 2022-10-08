@@ -350,6 +350,12 @@ void WorldSession::HandleSendMailCallback(WorldSession::AsyncMailSendRequest* re
 
     loadedPlayer->ModifyMoney(-int32(reqmoney));
 
+#ifdef USE_ACHIEVEMENTS
+
+    loadedPlayer->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_SPENT_FOR_MAIL, 30);
+
+#endif
+
     MailDraft draft(req->subject, req->body);
 
     if (!req->COD && (req->money || item))
