@@ -22153,10 +22153,10 @@ void Player::CastHighestStealthRank()
 
 namespace
 {
-void PlayerLogFormatted(uint32 accountId, WorldSession const* session, LogType logType, char const* subType, LogLevel logLevel, const std::string& text)
+bool PlayerLogFormatted(uint32 accountId, WorldSession const* session, LogType logType, char const* subType, LogLevel logLevel, const std::string& text, std::string& out)
 {
     if (logType >= LOG_TYPE_MAX || logType < 0)
-        return;
+        return false;
 
     std::stringstream log;
 
@@ -22249,7 +22249,7 @@ void PlayerLogFormatted(uint32 accountId, WorldSession const* session, LogType l
     if (!text.empty())
         log << ": " << text;
 
-    sLog.Out(logType, logLevel, log.str().c_str());
+    out = log.str();
 
     // TODO: additional settings for database logging
     if (logLevel > sLog.GetDbLevel() ||
@@ -22264,6 +22264,8 @@ void PlayerLogFormatted(uint32 accountId, WorldSession const* session, LogType l
         stmt.addString(text);
         stmt.Execute();
     }
+
+    return true;
 }
 }
 
@@ -22274,7 +22276,14 @@ void Log::Player(WorldSession const* session, LogType logType, LogLevel logLevel
     va_start(ap, format);
     vsnprintf(buff, sizeof(buff), format, ap);
     va_end(ap);
-    PlayerLogFormatted(session->GetAccountId(), session, logType, nullptr, logLevel, buff);
+
+    std::string log;
+
+    if (PlayerLogFormatted(session->GetAccountId(), session, logType, nullptr, logLevel, buff, log))
+    {
+        // Player logs should never go to the console
+        OutFile(logType, logLevel, log);
+    }
 }
 
 void Log::Player(WorldSession const* session, LogType logType, char const* subType, LogLevel logLevel, char const* format, ...)
@@ -22284,8 +22293,14 @@ void Log::Player(WorldSession const* session, LogType logType, char const* subTy
     va_start(ap, format);
     vsnprintf(buff, sizeof(buff), format, ap);
     va_end(ap);
-    PlayerLogFormatted(session->GetAccountId(), session, logType, subType, logLevel, buff);
 
+    std::string log;
+
+    if (PlayerLogFormatted(session->GetAccountId(), session, logType, subType, logLevel, buff, log))
+    {
+        // Player logs should never go to the console
+        OutFile(logType, logLevel, log);
+    }
 }
 
 void Log:: Player(uint32 accountId, LogType logType, LogLevel logLevel, char const* format, ...)
@@ -22295,7 +22310,14 @@ void Log:: Player(uint32 accountId, LogType logType, LogLevel logLevel, char con
     va_start(ap, format);
     vsnprintf(buff, sizeof(buff), format, ap);
     va_end(ap);
-    PlayerLogFormatted(accountId, nullptr, logType, nullptr, logLevel, buff);
+
+    std::string log;
+
+    if (PlayerLogFormatted(accountId, nullptr, logType, nullptr, logLevel, buff, log))
+    {
+        // Player logs should never go to the console
+        OutFile(logType, logLevel, log);
+    }
 }
 
 void Log::Player(uint32 accountId, LogType logType, char const* subType, LogLevel logLevel, char const* format, ...)
@@ -22305,5 +22327,12 @@ void Log::Player(uint32 accountId, LogType logType, char const* subType, LogLeve
     va_start(ap, format);
     vsnprintf(buff, sizeof(buff), format, ap);
     va_end(ap);
-    PlayerLogFormatted(accountId, nullptr, logType, subType, logLevel, buff);
+
+    std::string log;
+
+    if (PlayerLogFormatted(accountId, nullptr, logType, subType, logLevel, buff, log))
+    {
+        // Player logs should never go to the console
+        OutFile(logType, logLevel, log);
+    }
 }
