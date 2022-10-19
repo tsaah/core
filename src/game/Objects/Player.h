@@ -1963,7 +1963,7 @@ class Player final: public Unit
         void UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* target);
         template<class T>
         void UpdateVisibilityOf(WorldObject const* viewPoint, T* target, UpdateData& data, std::set<WorldObject*>& visibleNow);
-        void BeforeVisibilityDestroy(Creature* creature);
+        void LeaveCombatWithFarAwayCreatures();
 
         Camera& GetCamera() { return m_camera; }
 
@@ -2158,7 +2158,6 @@ class Player final: public Unit
         // Cannot be detected by creature (Should be tested in AI::MoveInLineOfSight)
         void SetCannotBeDetectedTimer(uint32 milliseconds) { m_cannotBeDetectedTimer = milliseconds; };
         bool CanBeDetected() const override { return m_cannotBeDetectedTimer <= 0; }
-        bool IsInCombatWithCreature(Creature const* pCreature);
 
         // PlayerAI management
         PlayerAI* i_AI;
