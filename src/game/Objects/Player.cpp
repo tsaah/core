@@ -611,6 +611,7 @@ Player::Player(WorldSession* session) : Unit(),
     SetGroupInvite(nullptr);
     m_groupUpdateMask = 0;
     m_auraUpdateMask = 0;
+    m_LFGAreaId = 0;
 
     duel = nullptr;
 
@@ -2929,6 +2930,10 @@ bool Player::CanInteractWithNPC(Creature const* pCreature, uint32 npcflagmask) c
 
     // combat check
     if (pCreature->IsInCombat())
+        return false;
+
+    // not interactable
+    if (pCreature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
         return false;
 
     // not unfriendly
