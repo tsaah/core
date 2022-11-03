@@ -7154,7 +7154,11 @@ void Unit::SetDeathState(DeathState s)
 
         i_motionMaster.Clear(false, true);
         i_motionMaster.MoveIdle();
-        StopMoving(IsMoving());
+
+        if (IsPlayer())
+            SetRooted(true);
+        else
+            StopMoving(IsMoving());
 
         // Powers are cleared on death.
         SetPower(GetPowerType(), 0);
