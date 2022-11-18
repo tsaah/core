@@ -2,7 +2,7 @@
 # - gcc under Ubuntu
 #
 # Builds are set to use 2 threads per type
-name: vmangos CI build
+name: vanilla
 
 on:
   push:
