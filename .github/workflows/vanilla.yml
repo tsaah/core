@@ -1,0 +1,75 @@
+#3 build types
+# - gcc under Ubuntu
+#
+# Builds are set to use 2 threads per type
+name: vmangos CI build
+
+on:
+  push:
+    paths-ignore:
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/ISSUE_TEMPLATE.md'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'sql/**'
+      - '.drone.yml'
+      - 'README.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CONTRIBUTING.md'
+
+  pull_request:
+    paths-ignore:
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/ISSUE_TEMPLATE.md'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'sql/**'
+      - '.drone.yml'
+      - 'README.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CONTRIBUTING.md'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        compiler: [gcc]
+
+    steps:
+
+    #git checkout
+    - uses: actions/checkout@v2
+
+    #before install dependencies
+    - name: ubuntu dependencies
+      #ubuntu dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get -qq install libmysql++-dev libace-dev libtbb-dev
+        sudo apt-get -qq install cmake build-essential cppcheck git make libiberty-dev openssl libssl-dev
+
+
+    #build and install
+    #ubuntu
+    - name: ubuntu build & install
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        mkdir build
+        mkdir _install
+        cd build
+        cmake ../ -DCMAKE_BUILD_TYPE=Release -DDEBUG_SYMBOLS:BOOL=OFF -DUSE_PCH:BOOL=ON -DCMAKE_INSTALL_PREFIX=../_install -DSUPPORTED_CLIENT_BUILD:STRING=CLIENT_BUILD_1_12_1 -DUSE_STD_MALLOC:BOOL=OFF -DUSE_LIBCURL:BOOL=OFF -DWITH_WARNINGS:BOOL=OFF -DUSE_EXTRACTORS:BOOL=ON -DUSE_SCRIPTS:BOOL=ON -DUSE_ANTICHEAT:BOOL=ON
+        make -j $(nproc)
+        make install
+      shell: bash
+    - name: archive files
+      run: |
+          cd ${{github.workspace}}
+          tar cjf artifacts.tar.xz _install
+    - name: archive this artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: snapshot-devbuild
+          path: "${{github.workspace}}/artifacts.tar.xz"
+
