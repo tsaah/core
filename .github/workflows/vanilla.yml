@@ -70,6 +70,6 @@ jobs:
     - name: archive this artifact
       uses: actions/upload-artifact@v2
       with:
-          name: snapshot-devbuild
+          name: vanilla
           path: "${{github.workspace}}/artifacts.tar.xz"
 
