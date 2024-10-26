@@ -65,6 +65,7 @@
 #include "LFGMgr.h"
 #include "AutoBroadCastMgr.h"
 #include "AuctionHouseBotMgr.h"
+#include "AuctionHouseVendorBotMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
 #include "ZoneScriptMgr.h"
@@ -1066,7 +1067,7 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_UINT32_PACKET_BCAST_THREADS,                  "Network.PacketBroadcast.Threads", 0);
     setConfig(CONFIG_UINT32_PACKET_BCAST_FREQUENCY,                "Network.PacketBroadcast.Frequency", 50);
     setConfig(CONFIG_UINT32_PBCAST_DIFF_LOWER_VISIBILITY_DISTANCE, "Network.PacketBroadcast.ReduceVisDistance.DiffAbove", 0);
-    
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "* Anticrash : options 0x%x rearm after %usec", getConfig(CONFIG_UINT32_ANTICRASH_OPTIONS), getConfig(CONFIG_UINT32_ANTICRASH_REARM_TIMER) / 1000);
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "* Pathfinding : [%s]", getConfig(CONFIG_BOOL_MMAP_ENABLED) ? "ON" : "OFF");
 
@@ -1825,6 +1826,9 @@ void World::SetInitialWorldSettings()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading AH bot");
     sAuctionHouseBotMgr.Load();
 
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading AuctionHouse Vendor Bot");
+    sAuctionHouseVendorBotMgr.Load();
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Caching player phases (obsolete)");
     sObjectMgr.LoadPlayerPhaseFromDb();
 
@@ -2040,7 +2044,7 @@ void World::Update(uint32 diff)
     std::future<void> job = m_updateThreads->processWorkload(_asyncTasksBusy);
     _asyncTasks.clear();
     lock.unlock();
-    
+
     sMapMgr.Update(diff);
     sBattleGroundMgr.Update(diff);
     sGuardMgr.Update(diff);
@@ -2490,7 +2494,7 @@ class BanQueryHolder : public SqlQueryHolder
 public:
     BanQueryHolder(BanMode mode, std::string banTarget, uint32 duration, std::string reason, uint32 realmId, std::string author,
         uint32 authorAccountId)
-        : m_mode(mode), m_duration(duration), m_reason(reason), m_realmId(realmId), 
+        : m_mode(mode), m_duration(duration), m_reason(reason), m_realmId(realmId),
           m_author(author), m_banTarget(banTarget), m_accountId(authorAccountId)
     {
     }
