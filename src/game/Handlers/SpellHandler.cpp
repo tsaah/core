@@ -282,6 +282,13 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPacket& recv_data)
     {
         _player->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_LOOTING_CANCELS);
         obj->Use(_player);
+
+#ifdef USE_ACHIEVEMENTS
+
+        _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_GAMEOBJECT, obj->GetEntry());
+
+#endif
+
     }
 }
 
