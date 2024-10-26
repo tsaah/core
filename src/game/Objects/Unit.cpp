@@ -785,6 +785,34 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
         }
     }
 
+#ifdef USE_ACHIEVEMENTS
+    // TODO(TsAah): decide on config options for optimization or non-player victims
+
+    if (this != pVictim) {
+        if (Player* killer = GetCharmerOrOwnerPlayerOrPlayerItself()) {
+            // pussywizard: don't allow GMs to deal damage in normal way (this leaves no evidence in logs!), they have commands to do so
+            //if (!allowGM && killer->GetSession()->GetSecurity() && killer->GetSession()->GetSecurity() <= SEC_ADMINISTRATOR)
+            //  return 0;
+
+            // if (auto* const bg = killer->GetBattleGround())  // NOTE(TsAah): uncomment for optimization
+                killer->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DAMAGE_DONE, damage, 0, pVictim); // pussywizard: InBattleground() optimization
+
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+            killer->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HIT_DEALT, damage); // pussywizard: optimization
+#endif
+        }
+    }
+
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+
+    if (pVictim->GetTypeId() == TYPEID_PLAYER) {
+        pVictim->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HIT_RECEIVED, damage); // pussywizard: optimization
+    }
+
+#endif
+#endif
+
+
     if (health <= damage && pVictim->GetInvincibilityHpThreshold() == 0)
     {
         DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DealDamage: victim just died");
@@ -803,6 +831,18 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
 
             he->DuelComplete(DUEL_INTERRUPTED);
         }
+#ifdef USE_ACHIEVEMENTS
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+
+        if (pVictim->GetTypeId() == TYPEID_PLAYER && pVictim != this) {
+            auto* player = pVictim->ToPlayer();
+            if (player) {
+                player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_DAMAGE_RECEIVED, health); // pussywizard: optimization
+            }
+        }
+
+#endif
+#endif
     }
     else                                                    // if (health <= damage)
     {
@@ -811,6 +851,15 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
             uint32 dmg = std::min<uint32>(health - pVictim->GetInvincibilityHpThreshold(), damage);
             pVictim->ModifyHealth(-(int32)dmg);
         }
+
+#ifdef USE_ACHIEVEMENTS
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+
+        if (pVictim->GetTypeId() == TYPEID_PLAYER) {
+            pVictim->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_DAMAGE_RECEIVED, damage); // pussywizard: optimization
+        }
+#endif
+#endif
 
         if (damagetype != DOT)
         {
@@ -1062,6 +1111,15 @@ void Unit::Kill(Unit* pVictim, SpellEntry const* spellProto, bool durabilityLoss
     if (pVictim != this) // The one who has the fatal blow
         ProcDamageAndSpell(ProcSystemArguments(pVictim, PROC_FLAG_KILL, PROC_FLAG_HEARTBEAT, PROC_EX_NONE, 0, 0));
 
+#ifdef USE_ACHIEVEMENTS
+
+    // update get killing blow achievements, must be done before setDeathState to be able to require auras on target
+    // and before Spirit of Redemption as it also removes auras
+    if (Player* killerPlayer = GetCharmerOrOwnerPlayerOrPlayerItself())
+        killerPlayer->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS, 1, 0, pVictim);
+
+#endif
+
     DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DealDamageAttackStop");
 
     bool const damageFromSpiritOfRedemptionTalent = (spellProto && spellProto->Id == 27965);
@@ -1243,6 +1301,19 @@ void Unit::Kill(Unit* pVictim, SpellEntry const* spellProto, bool durabilityLoss
     }
 
     pVictim->InterruptSpellsCastedOnMe(false, true);
+
+#ifdef USE_ACHIEVEMENTS
+
+    // achievement stuff
+    if (pVictim->GetTypeId() == TYPEID_PLAYER) {
+        if (GetTypeId() == TYPEID_UNIT) {
+            pVictim->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KILLED_BY_CREATURE, GetEntry());
+        } else if (pVictim != this && GetTypeId() == TYPEID_PLAYER) {
+            pVictim->ToPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KILLED_BY_PLAYER, 1, ToPlayer()->GetTeamId());
+        }
+    }
+
+#endif
 }
 
 struct PetOwnerKilledUnitHelper

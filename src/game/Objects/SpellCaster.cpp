@@ -768,6 +768,30 @@ int32 SpellCaster::DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* s
     if (IsPlayer() || pVictim->IsPlayer())
         pHealer->SendHealSpellLog(pVictim, spellProto->Id, addhealth, critical);
 
+#ifdef USE_ACHIEVEMENTS
+    // TODO(TsAah): consider config options for optimization and other...
+
+    if (Player* player = ToPlayer()) {
+        // use the actual gain, as the overheal shall not be counted, skip gain 0 (it ignored anyway in to criteria)
+#ifndef USE_ACHIEVEMENTS_ENABLE_ALL
+        if (gain && player->InBattleGround()) // pussywizard: InBattleground() optimization
+#endif
+            player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HEALING_DONE, gain, 0, pVictim);
+
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+        player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEAL_CASTED, addhealth); // pussywizard: optimization
+#endif
+    }
+
+#ifdef USE_ACHIEVEMENTS_ENABLE_ALL
+    if (Player* player = pVictim->ToPlayer()) {
+        player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_HEALING_RECEIVED, gain); // pussywizard: optimization
+        player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALING_RECEIVED, addhealth); // pussywizard: optimization
+    }
+#endif
+
+#endif
+
     return gain;
 }
 

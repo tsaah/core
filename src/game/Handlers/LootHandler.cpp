@@ -309,6 +309,12 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recv_data*/)
             {
                 i->LootMoney(moneyPerPlayer, pLoot);
                 i->SendLootMoneyNotify(moneyPerPlayer);
+
+#ifdef USE_ACHIEVEMENTS
+
+                i->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, moneyPerPlayer);
+
+#endif
             }
         }
         else
@@ -317,6 +323,12 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recv_data*/)
 
             // in wotlk and after this should be sent for solo looting too
             //player->SendLootMoneyNotify(pLoot->gold);
+
+#ifdef USE_ACHIEVEMENTS
+
+            player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY, pLoot->gold);
+
+#endif
         }
 
         pLoot->gold = 0;
@@ -726,6 +738,13 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recv_data)
             target->GetShortDescription().c_str(), lootGuid.GetString().c_str());
         target->SendNewItem(newitem, uint32(item.count), false, false, true);
         target->OnReceivedItem(newitem);
+
+#ifdef USE_ACHIEVEMENTS
+
+        target->UpdateLootAchievements(&item, pLoot);
+
+#endif
+
     }
 
     // mark as looted

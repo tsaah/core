@@ -47,6 +47,9 @@ set (game_SRCS
     Weather.cpp
     World.cpp
     WorldSession.cpp
+    Achievements/AchievementMgr.cpp
+    Achievements/AchievementScriptMgr.cpp
+    Achievements/achievement_scripts.cpp
     AI/BasicAI.cpp
     AI/CreatureAI.cpp
     AI/CreatureAIRegistry.cpp
@@ -258,6 +261,8 @@ set (game_SRCS
     World.h
     WorldSession.h
     WorldStates.h
+    Achievements/AchievementMgr.h
+    Achievements/AchievementScriptMgr.h
     AI/BasicAI.h
     AI/CreatureAI.h
     AI/CreatureAIImpl.h
