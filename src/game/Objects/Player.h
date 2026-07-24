@@ -40,6 +40,12 @@
 #include "PlayerTaxi.h"
 #include "MirrorTimer.h"
 
+#ifdef USE_ACHIEVEMENTS
+
+#include "Achievements/AchievementMgr.h"
+
+#endif
+
 #include <string>
 #include <utility>
 #include <vector>
@@ -632,6 +638,11 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_BATTLEGROUND_DATA,
     PLAYER_LOGIN_QUERY_FORGOTTEN_SKILLS,
 
+#ifdef USE_ACHIEVEMENTS
+    PLAYER_LOGIN_QUERY_LOADACHIEVEMENTS,
+    PLAYER_LOGIN_QUERY_LOAD_CRITERIA_PROGRESS,
+#endif
+
     MAX_PLAYER_LOGIN_QUERY
 };
 
@@ -1146,6 +1157,9 @@ class Player final: public Unit
         bool SatisfyQuestPrevChain(Quest const* qInfo, bool msg) const;
         bool TakeOrReplaceQuestStartItems(uint32 questId, bool msg, bool giveQuestStartItem);
         bool GetQuestRewardStatus(uint32 questId) const;
+#ifdef USE_ACHIEVEMENTS
+        uint32 GetRewardedQuestCount() const;
+#endif
         QuestStatusData const* GetQuestStatusData(uint32 questId) const;
         QuestStatus GetQuestStatus(uint32 questId) const;
         void SetQuestStatus(uint32 questId, QuestStatus status);
@@ -2488,6 +2502,30 @@ class Player final: public Unit
         static uint32 GetRankFromDB(ObjectGuid guid);
         int GetGuildIdInvited() const { return m_guildIdInvited; }
         static void RemovePetitionsAndSigns(ObjectGuid guid, uint32 exceptPetitionId = 0);
+
+#ifdef USE_ACHIEVEMENTS
+public:
+    bool isHonorOrXPTarget(Unit* victim) const;
+    void UpdateAchievementCriteria(AchievementCriteriaTypes type,
+                                       uint32                   miscValue1 = 0,
+                                       uint32                   miscValue2 = 0,
+                                       Unit const*                    unit = nullptr);
+
+    void CheckAllAchievementCriteria();
+    void ResetAchievements();
+    void SendRespondInspectAchievements(Player* player) const;
+    bool HasAchieved(uint32 achievementId) const;
+    void StartTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry, uint32 timeLost = 0);
+    void RemoveTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry);
+    void ResetAchievementCriteria(AchievementCriteriaCondition condition, uint32 value, bool evenIfCriteriaComplete = false);
+
+    void CompletedAchievement(AchievementEntry const* entry);
+
+    void UpdateLootAchievements(LootItem* item, Loot* loot);
+private:
+    AchievementMgr* m_achievementMgr;
+
+#endif
 };
 
 inline Player* Object::ToPlayer()

@@ -1877,6 +1877,13 @@ void GameObject::Use(Unit* user)
             Player* player = (Player*)user;
 
             player->SendLoot(GetObjectGuid(), LOOT_FISHINGHOLE);
+
+#ifdef USE_ACHIEVEMENTS
+
+            player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, GetGOInfo()->id);
+
+#endif
+
             return;
         }
 #endif

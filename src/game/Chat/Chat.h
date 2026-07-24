@@ -1141,6 +1141,16 @@ class ChatHandler
         void HandleCharacterDeletedListHelper(DeletedInfoList const& foundList);
         void HandleCharacterDeletedRestoreHelper(DeletedInfo const& delInfo);
 
+#ifdef USE_ACHIEVEMENTS
+        bool HandleGetCategories(char* args);
+        bool HandleGerAchievements(char* args);
+        bool HandleGetCriteria(char* args);
+        bool HandleGetCharacterCriteria(char* args);
+        bool HandleGetCharacterAchuievements(char* args);
+        bool HandleAchievementAddCommand(char* args);
+        bool HandleAchievementCheckAllCommand(char* args);
+#endif
+
         void SetSentErrorMessage(bool val){ m_sentErrorMessage = val;};
     private:
         WorldSession* m_session;                           // != nullptr for chat command call and nullptr for CLI command

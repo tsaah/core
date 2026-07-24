@@ -35,6 +35,10 @@
 #include "CharacterDatabaseCache.h"
 #include "Config/Config.h"
 
+#ifdef USE_ACHIEVEMENTS
+#include "Achievements/AchievementMgr.h"
+#endif
+
 #include <regex>
 #include <iterator>
 
@@ -1577,6 +1581,69 @@ void ChatHandler::HandleCharacterDeletedRestoreHelper(DeletedInfo const& delInfo
         delInfo.name.c_str(), delInfo.accountId, delInfo.lowguid);
     sObjectMgr.LoadPlayerCacheData(delInfo.lowguid);
 }
+
+#ifdef USE_ACHIEVEMENTS
+
+/**
+ * Handles the '.achievements getCategoties' command, which should assemble all categories into a message and sed it back to player
+ *
+ * @param args current player categories version
+ */
+bool ChatHandler::HandleGetCategories(char* args) {
+    int32 version = 0;
+    if (!ExtractOptInt32(&args, version, 0))
+        return false;
+    sAchievementMgr->getAllCategories(m_session, version);
+    return true;
+}
+
+/**
+ * Handles the '.achievements getAchievements' command, which should assemble all achievements into a message and sed it back to player
+ *
+ * @param args current player achievements version
+ */
+bool ChatHandler::HandleGerAchievements(char* args) {
+    int32 version = 0;
+    if (!ExtractOptInt32(&args, version, 0))
+        return false;
+    sAchievementMgr->getAllAchievements(m_session, version);
+    return true;
+}
+
+/**
+ * Handles the '.achievements getCriteria' command, which should assemble all criteria into a message and sed it back to player
+ *
+ * @param args current player criteria version
+ */
+bool ChatHandler::HandleGetCriteria(char* args) {
+    int32 version = 0;
+    if (!ExtractOptInt32(&args, version, 0))
+        return false;
+    sAchievementMgr->getAllCriteria(m_session, version);
+    return true;
+}
+
+/**
+ * Handles the '.achievements getCriteria' command, which should assemble all criteria into a message and sed it back to player
+ *
+ * @param args current player criteria version
+ */
+bool ChatHandler::HandleGetCharacterCriteria(char* args) {
+    sAchievementMgr->getCharacterCriteria(m_session);
+    return true;
+}
+
+/**
+ * Handles the '.achievements getCriteria' command, which should assemble all criteria into a message and sed it back to player
+ *
+ * @param args current player criteria version
+ */
+bool ChatHandler::HandleGetCharacterAchuievements(char* args) {
+    sAchievementMgr->getCharacterAchievements(m_session);
+    return true;
+}
+
+#endif
 
 /**
  * Handles the '.character deleted restore' command, which restores all deleted characters which matches the given search string
@@ -3777,6 +3844,18 @@ bool ChatHandler::HandleListTalentsCommand(char* /*args*/)
     return true;
 }
 
+#ifdef USE_ACHIEVEMENTS
+bool ChatHandler::HandleResetAchievementsCommand(char* args)
+{
+    Player* target;
+    if (!ExtractPlayerTarget(&args, &target))
+        return false;
+
+    target->ResetAchievements();
+    return true;
+}
+#endif
+
 bool ChatHandler::HandleResetHonorCommand(char* args)
 {
     Player* target;
@@ -3784,6 +3863,13 @@ bool ChatHandler::HandleResetHonorCommand(char* args)
         return false;
 
     target->GetHonorMgr().Reset();
+
+#ifdef USE_ACHIEVEMENTS
+
+    target->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_EARN_HONORABLE_KILL);
+
+#endif
+
     return true;
 }
 
