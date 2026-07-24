@@ -912,6 +912,9 @@ ChatCommand * ChatHandler::getCommandTable()
 
     static ChatCommand resetCommandTable[] =
     {
+#ifdef USE_ACHIEVEMENTS
+        { "achievements",   SEC_GAMEMASTER,     true,  &ChatHandler::HandleResetAchievementsCommand,   "", nullptr },
+#endif
         { "honor",          SEC_DEVELOPER,      true,  &ChatHandler::HandleResetHonorCommand,          "", nullptr },
         { "level",          SEC_DEVELOPER,      true,  &ChatHandler::HandleResetLevelCommand,          "", nullptr },
         { "spells",         SEC_DEVELOPER,      true,  &ChatHandler::HandleResetSpellsCommand,         "", nullptr },
@@ -1172,6 +1175,19 @@ ChatCommand * ChatHandler::getCommandTable()
         { nullptr,              0,                  false, nullptr,                                       "", nullptr }
     };
 
+#ifdef USE_ACHIEVEMENTS
+    static ChatCommand achievementsCommandTable[] = {
+        { "getCategoties",              SEC_PLAYER,         false, &ChatHandler::HandleGetCategories,             "", nullptr },
+        { "getAchievements",            SEC_PLAYER,         false, &ChatHandler::HandleGerAchievements,           "", nullptr },
+        { "getCriteria",                SEC_PLAYER,         false, &ChatHandler::HandleGetCriteria,               "", nullptr },
+        { "getCharacterCriteria",       SEC_PLAYER,         false, &ChatHandler::HandleGetCharacterCriteria,      "", nullptr },
+        { "getCharacterAchievements",   SEC_PLAYER,         false, &ChatHandler::HandleGetCharacterAchuievements, "", nullptr },
+        { "add",                        SEC_GAMEMASTER,     true,  &ChatHandler::HandleAchievementAddCommand,      "", nullptr },
+        { "checkall",                   SEC_GAMEMASTER,     true,  &ChatHandler::HandleAchievementCheckAllCommand, "", nullptr },
+        { nullptr,                      0,                  false, nullptr,                                       "", nullptr }
+    };
+#endif
+
     static ChatCommand warEffortCommandTable[] =
     {
         { "info",           SEC_DEVELOPER,    true,  &ChatHandler::HandleWarEffortInfoCommand,         "", nullptr },
@@ -1313,6 +1329,10 @@ ChatCommand * ChatHandler::getCommandTable()
         { "antispam",       SEC_TICKETMASTER,   true, nullptr,                                         "", AntiSpamCommandTable },
         { "gold",           SEC_BASIC_ADMIN,    true, nullptr,                                         "", goldCommandTable },
         { "wareffort",      SEC_DEVELOPER,      true, nullptr,                                         "", warEffortCommandTable },
+
+#ifdef USE_ACHIEVEMENTS
+        { "achievements",   SEC_PLAYER,         false, nullptr,                                        "", achievementsCommandTable  },
+#endif
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };
 

@@ -246,6 +246,15 @@ class BattleGroundAB : public BattleGround
         bool                m_isInformedNearVictory;
         uint32              m_honorTics;
         uint32              m_reputationTics;
+
+#ifdef USE_ACHIEVEMENTS
+    public:
+        bool AllNodesConrolledByTeam(TeamId teamId) const override;
+        bool IsTeamScores500Disadvantage(TeamId teamId) const { return _teamScores500Disadvantage[teamId]; }
+    private:
+        uint8 _controlledPoints[BG_TEAMS_COUNT] {};
+        bool _teamScores500Disadvantage[BG_TEAMS_COUNT] {};
+#endif
 };
 #endif
 #endif

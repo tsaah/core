@@ -96,6 +96,46 @@ ReputationRank ReputationMgr::GetBaseRank(FactionEntry const* factionEntry) cons
     return ReputationToRank(reputation);
 }
 
+#ifdef USE_ACHIEVEMENTS
+
+uint32 ReputationMgr::GetExaltedFactionCount() const
+{
+    uint32 count = 0;
+    for (auto const& itr : sObjectMgr.GetFactionMap())
+        if (itr.second.reputationListID >= 0 && GetRank(&itr.second) >= REP_EXALTED)
+            ++count;
+    return count;
+}
+
+uint32 ReputationMgr::GetReveredFactionCount() const
+{
+    uint32 count = 0;
+    for (auto const& itr : sObjectMgr.GetFactionMap())
+        if (itr.second.reputationListID >= 0 && GetRank(&itr.second) >= REP_REVERED)
+            ++count;
+    return count;
+}
+
+uint32 ReputationMgr::GetHonoredFactionCount() const
+{
+    uint32 count = 0;
+    for (auto const& itr : sObjectMgr.GetFactionMap())
+        if (itr.second.reputationListID >= 0 && GetRank(&itr.second) >= REP_HONORED)
+            ++count;
+    return count;
+}
+
+uint32 ReputationMgr::GetVisibleFactionCount() const
+{
+    uint32 count = 0;
+    for (auto const& itr : m_factions)
+        if (itr.second.Flags & FACTION_FLAG_VISIBLE)
+            ++count;
+    return count;
+}
+
+#endif
+
 void ReputationMgr::ApplyForceReaction(uint32 faction_id, ReputationRank rank, bool apply)
 {
     if (apply)
@@ -268,6 +308,16 @@ bool ReputationMgr::SetOneFactionReputation(FactionEntry const* factionEntry, in
             SetAtWar(&faction, true);
 
         m_player->ReputationChanged(factionEntry);
+
+#ifdef USE_ACHIEVEMENTS
+
+        m_player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KNOWN_FACTIONS,          factionEntry->ID);
+        m_player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REPUTATION,         factionEntry->ID);
+        m_player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_EXALTED_REPUTATION, factionEntry->ID);
+        m_player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_REVERED_REPUTATION, factionEntry->ID);
+        m_player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GAIN_HONORED_REPUTATION, factionEntry->ID);
+
+#endif
 
         return true;
     }

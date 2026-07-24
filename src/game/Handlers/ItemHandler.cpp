@@ -605,6 +605,13 @@ void WorldSession::HandleSellItemOpcode(WorldPackets::Item::SellItem const& pack
     }
 
     _player->LogModifyMoney(money, "SellItem", pCreature->GetObjectGuid(), pItem->GetEntry());
+
+#ifdef USE_ACHIEVEMENTS
+
+    _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_MONEY_FROM_VENDORS, money);
+
+#endif
+
 }
 
 void WorldSession::HandleBuybackItem(WorldPackets::Item::BuybackItem const& packet)
@@ -634,6 +641,11 @@ void WorldSession::HandleBuybackItem(WorldPackets::Item::BuybackItem const& pack
         return;
     }
 
+#ifdef USE_ACHIEVEMENTS
+
+            _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_RECEIVE_EPIC_ITEM, pItem->GetEntry(), pItem->GetCount());
+
+#endif
     uint32 price = _player->GetBuyBackItemPrice(slot);
     if (_player->GetMoney() < price)
     {
@@ -906,6 +918,13 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPackets::Item::BuyBankSlot const
 
     _player->SetBankBagSlotCount(slot);
     _player->ModifyMoney(-int32(price));
+
+#ifdef USE_ACHIEVEMENTS
+
+    _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BUY_BANK_SLOT);
+
+#endif
+
 }
 
 void WorldSession::HandleAutoBankItemOpcode(WorldPackets::Item::AutoBankItem const& packet)

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
  * Copyright (C) 2009-2011 MaNGOSZero <https://github.com/mangos/zero>
  * Copyright (C) 2011-2016 Nostalrius <https://nostalrius.org>
@@ -40,6 +40,9 @@
 #include "CellImpl.h"
 #include "Anticheat.h"
 #include "AccountMgr.h"
+#ifdef USE_ACHIEVEMENTS
+#include "Achievements/AchievementMgr.h"
+#endif
 
 bool WorldSession::SanitizeChatMessage(std::string& msg, uint32 lang, uint32 msgType)
 {
@@ -171,6 +174,13 @@ void WorldSession::HandleChatMessageOpcode(WorldPackets::Chat::ChatMessage const
     // LANG_ADDON should not be changed nor be affected by flood control
     else
     {
+#ifdef USE_ACHIEVEMENTS
+        if (_player && sAchievementMgr->HandleAddonMessage(this, packet.message))
+        {
+            return; // consumed by the achievement addon protocol, not for broadcast
+        }
+#endif
+
         // prevent talking in unknown language (cheating)
         if (packet.lang != LANG_UNIVERSAL && _player && !_player->KnowsLanguage(packet.lang))
         {
@@ -741,6 +751,10 @@ void WorldSession::HandleTextEmoteOpcode(WorldPackets::Misc::TextEmote const& pa
     }
 
     Unit* unit = GetPlayer()->GetMap()->GetUnit(packet.guid);
+
+#ifdef USE_ACHIEVEMENTS
+    GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_DO_EMOTE, packet.textEmote, 0, unit);
+#endif
 
     MaNGOS::EmoteChatBuilder emote_builder(*GetPlayer(), packet.textEmote, packet.emoteNum, unit);
     MaNGOS::LocalizedPacketDo<MaNGOS::EmoteChatBuilder > emote_do(emote_builder);

@@ -386,6 +386,18 @@ void WorldSession::HandleLootRoll(WorldPackets::Loot::LootRoll const& packet)
 
     // everything is fine, do it, if false then some cheating problem found (result not used in pre-3.0)
     group->CountRollVote(GetPlayer(), packet.lootedTarget, packet.itemSlot, RollVote(packet.rollType));
+#ifdef USE_ACHIEVEMENTS
+
+    switch (packet.rollType) {
+        case 1: {
+            GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_NEED, 1);
+        } break;
+        case 2: {
+            GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_GREED, 1);
+        } break;
+    }
+
+#endif
 }
 
 void WorldSession::HandleMinimapPingOpcode(WorldPackets::Group::MinimapPing const& packet)

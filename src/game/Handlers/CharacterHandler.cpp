@@ -103,6 +103,13 @@ bool LoginQueryHolder::Initialize()
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILEDITEMS,     "SELECT `creator_guid`, `gift_creator_guid`, `count`, `duration`, `charges`, `flags`, `enchantments`, `random_property_id`, `durability`, `text`, `mail_id`, `item_guid`, `item_instance`.`item_id`, `generated_loot` FROM `mail_items` JOIN `item_instance` ON `item_guid` = `guid` WHERE `receiver_guid` = '%u'", m_guid.GetCounter());
     res &= SetPQuery(PLAYER_LOGIN_QUERY_FORGOTTEN_SKILLS,    "SELECT `skill`, `value` FROM `character_forgotten_skills` WHERE `guid` = '%u'", m_guid.GetCounter());
 
+#ifdef USE_ACHIEVEMENTS
+
+    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADACHIEVEMENTS,    "SELECT `achievement`, `date` FROM `character_achievement` WHERE `guid` = '%u'", m_guid.GetCounter());
+    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOAD_CRITERIA_PROGRESS,    "SELECT `criteria`, `counter`, `date` FROM `character_achievement_progress` WHERE `guid` = '%u'", m_guid.GetCounter());
+
+#endif
+
     return res;
 }
 
@@ -686,6 +693,19 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
 
     m_playerLoading = false;
     delete holder;
+
+#ifdef USE_ACHIEVEMENTS
+
+    // Must run after m_playerLoading is cleared - SendAchievementEarned() guards on
+    // GetSession()->PlayerLoading() and would silently swallow the "achievement earned"
+    // notification for anything first-detected-complete during this catch-up scan otherwise.
+    pCurrChar->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ON_LOGIN, 1);
+    // Catch up characters that existed before achievements were enabled, or whose progress may
+    // be stale after a content/data fix - the criteria list itself is a small, fixed-size loop,
+    // not proportional to character data, so this is cheap enough to run on every login.
+    pCurrChar->CheckAllAchievementCriteria();
+
+#endif
 
     if (alreadyOnline)
     {
