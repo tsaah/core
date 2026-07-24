@@ -406,6 +406,13 @@ void WorldSession::HandleAuctionSellItem(WorldPackets::AuctionHouse::AuctionSell
     CharacterDatabase.CommitTransaction();
 
     SendAuctionCommandResult(AH, AUCTION_STARTED, AUCTION_OK);
+
+#ifdef USE_ACHIEVEMENTS
+
+    GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CREATE_AUCTION, 1);
+
+#endif
+
 }
 
 // this function is called when client bids or buys out auction
@@ -519,6 +526,12 @@ void WorldSession::HandleAuctionPlaceBid(WorldPackets::AuctionHouse::AuctionPlac
         if (auction_owner)
             auction_owner->GetSession()->SendAuctionOwnerNotification(auction, false);
 
+#ifdef USE_ACHIEVEMENTS
+
+        GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_AUCTION_BID, packet.price);
+
+#endif
+
         // after this update we should save player's money ...
         CharacterDatabase.PExecute("UPDATE `auction` SET `buyer_guid` = '%u', `last_bid` = '%u' WHERE `id` = '%u'", auction->bidder, auction->bid, auction->Id);
 
@@ -548,6 +561,12 @@ void WorldSession::HandleAuctionPlaceBid(WorldPackets::AuctionHouse::AuctionPlac
         data.parts[1].lowGuid = auction->bidder;
         data.parts[1].money = auction->bid;
         sWorld.LogTransaction(data);
+
+#ifdef USE_ACHIEVEMENTS
+
+        GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_AUCTION_BID, auction->buyout);
+
+#endif
 
         sAuctionMgr.SendAuctionSuccessfulMail(auction);
         sAuctionMgr.SendAuctionWonMail(auction);

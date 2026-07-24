@@ -502,4 +502,149 @@ void SQLStorageLoaderBase<DerivedLoader, StorageClass>::LoadProgressive(StorageC
     } while (result->NextRow());
 }
 
+template<class DerivedLoader, class StorageClass>
+void SQLStorageLoaderBase<DerivedLoader, StorageClass>::LoadProgressiveTrailingPatch(StorageClass& store, uint32 wow_patch, std::string column_name /* = "patch" */, bool error_at_empty /*= true*/)
+{
+    // Like LoadProgressive, but for tables where the patch column is the LAST column instead of
+    // the second (e.g. achievement_dbc, achievement_category_dbc). LoadProgressive's row-reading
+    // loop hardcodes the patch column at position 1 ("second column is the patch column, so skip
+    // ahead"); applied to a table shaped this way it fires at the wrong position and every field
+    // from index 2 onward silently reads one column to the right of where it should - no offset
+    // is needed here since the trailing patch column is simply never read.
+    Field* fields = nullptr;
+    std::unique_ptr<QueryResult> result = WorldDatabase.PQuery("SELECT MAX(%s) FROM %s t1 WHERE %s=(SELECT max(%s) FROM %s t2 WHERE t1.%s=t2.%s && %s <= %u)", store.EntryFieldName(), store.GetTableName(), column_name.c_str(), column_name.c_str(), store.GetTableName(), store.EntryFieldName(), store.EntryFieldName(), column_name.c_str(), wow_patch);
+    if (!result)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Error loading %s table (not exist?)\n", store.GetTableName());
+        Log::WaitBeforeContinueIfNeed();
+        exit(1);                                            // Stop server at loading non exited table or not accessable table
+    }
+
+    uint32 maxRecordId = (*result)[0].GetUInt32() + 1;
+    uint32 recordCount = 0;
+    uint32 recordsize = 0;
+
+    result = WorldDatabase.PQuery("SELECT COUNT(*) FROM %s t1 WHERE %s=(SELECT max(%s) FROM %s t2 WHERE t1.%s=t2.%s && %s <= %u)", store.GetTableName(), column_name.c_str(), column_name.c_str(), store.GetTableName(), store.EntryFieldName(), store.EntryFieldName(), column_name.c_str(), wow_patch);
+    if (result)
+    {
+        fields = result->Fetch();
+        recordCount = fields[0].GetUInt32();
+    }
+
+    result = WorldDatabase.PQuery("SELECT * FROM %s t1 WHERE %s=(SELECT max(%s) FROM %s t2 WHERE t1.%s=t2.%s && %s <= %u)", store.GetTableName(), column_name.c_str(), column_name.c_str(), store.GetTableName(), store.EntryFieldName(), store.EntryFieldName(), column_name.c_str(), wow_patch);
+
+    if (!result)
+    {
+        if (error_at_empty)
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s table is empty!\n", store.GetTableName());
+        else
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "%s table is empty!\n", store.GetTableName());
+
+        recordCount = 0;
+        return;
+    }
+
+    if (store.GetSrcFieldCount() != result->GetFieldCount() - 1) // trailing patch column is not loaded
+    {
+        recordCount = 0;
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "Error in %s table, probably sql file format was updated (there should be %d fields in sql).\n", store.GetTableName(), store.GetSrcFieldCount());
+        Log::WaitBeforeContinueIfNeed();
+        exit(1);                                            // Stop server at loading broken or non-compatible table.
+    }
+
+    // get struct size
+    uint32 offset = 0;
+    for (uint32 x = 0; x < store.GetDstFieldCount(); ++x)
+    {
+        switch (store.GetDstFormat(x))
+        {
+            case FT_LOGIC:
+                recordsize += sizeof(bool);   break;
+            case FT_BYTE:
+                recordsize += sizeof(char);   break;
+            case FT_INT:
+                recordsize += sizeof(uint32); break;
+            case FT_FLOAT:
+                recordsize += sizeof(float);  break;
+            case FT_STRING:
+                recordsize += sizeof(char*);  break;
+            case FT_NA:
+                recordsize += sizeof(uint32); break;
+            case FT_NA_BYTE:
+                recordsize += sizeof(char);   break;
+            case FT_NA_FLOAT:
+                recordsize += sizeof(float);  break;
+            case FT_NA_POINTER:
+                recordsize += sizeof(char*);  break;
+            case FT_64BITINT:
+                recordsize += sizeof(uint64);  break;
+            case FT_IND:
+            case FT_SORT:
+                assert(false && "SQL storage not have sort field types");
+                break;
+            default:
+                assert(false && "unknown format character");
+                break;
+        }
+    }
+
+    // Prepare data storage and lookup storage
+    store.prepareToLoad(maxRecordId, recordCount, recordsize);
+
+    BarGoLink bar(recordCount);
+    do
+    {
+        fields = result->Fetch();
+        bar.step();
+
+        char* record = store.createRecord(fields[0].GetUInt32());
+        offset = 0;
+
+        // dependend on dest-size
+        // iterate two indexes: x over dest, y over source
+        //                      y++ If and only If x != FT_NA*
+        //                      x++ If and only If a value is stored
+        for (uint32 x = 0, y = 0; x < store.GetDstFieldCount();)
+        {
+            switch (store.GetDstFormat(x))
+            {
+                // For default fill continue and do not increase y
+                case FT_NA:         storeValue((uint32)0, store, record, x, offset);         ++x; continue;
+                case FT_NA_BYTE:    storeValue((char)0, store, record, x, offset);           ++x; continue;
+                case FT_NA_FLOAT:   storeValue((float)0.0f, store, record, x, offset);       ++x; continue;
+                case FT_NA_POINTER: storeValue((char const*)nullptr, store, record, x, offset); ++x; continue;
+                default:
+                    break;
+            }
+
+            // It is required that the input has at least as many columns set as the output requires
+            if (y >= store.GetSrcFieldCount())
+                assert(false && "SQL storage has too few columns!");
+
+            switch (store.GetSrcFormat(y))
+            {
+                case FT_LOGIC:  storeValue((bool)(fields[y].GetUInt32() > 0), store, record, x, offset);  ++x; break;
+                case FT_BYTE:   storeValue((char)fields[y].GetUInt8(), store, record, x, offset);         ++x; break;
+                case FT_INT:    storeValue((uint32)fields[y].GetUInt32(), store, record, x, offset);      ++x; break;
+                case FT_FLOAT:  storeValue((float)fields[y].GetFloat(), store, record, x, offset);        ++x; break;
+                case FT_STRING: storeValue((char const*)fields[y].GetString(), store, record, x, offset); ++x; break;
+                case FT_64BITINT: storeValue(fields[y].GetUInt64(), store, record, x, offset);            ++x; break;
+                case FT_NA:
+                case FT_NA_BYTE:
+                case FT_NA_FLOAT:
+                    // Do Not increase x
+                    break;
+                case FT_IND:
+                case FT_SORT:
+                case FT_NA_POINTER:
+                    assert(false && "SQL storage not have sort or pointer field types");
+                    break;
+                default:
+                    assert(false && "unknown format character");
+            }
+            ++y;
+        }
+    } while (result->NextRow());
+}
+
 #endif

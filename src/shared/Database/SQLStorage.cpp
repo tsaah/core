@@ -146,6 +146,12 @@ void SQLStorage::LoadProgressive(uint32 wow_patch, std::string column_name /*= "
     loader.LoadProgressive(*this, wow_patch, column_name, error_at_empty);
 }
 
+void SQLStorage::LoadProgressiveTrailingPatch(uint32 wow_patch, std::string column_name /*= "patch"*/, bool error_at_empty /*= true*/)
+{
+    SQLStorageLoader loader;
+    loader.LoadProgressiveTrailingPatch(*this, wow_patch, column_name, error_at_empty);
+}
+
 SQLStorage::SQLStorage(char const* fmt, char const* _entry_field, char const* sqlname)
 {
     Initialize(sqlname, _entry_field, fmt, fmt);

@@ -7,6 +7,10 @@ option(BUILD_EXTRACTORS               "Build extractors"                        
 option(BUILD_REALMMERGE               "Build helper tool for merging character databases"                                             OFF)
 option(ENABLE_MAILSENDER              "Enables support for sending emails via sendgrid.com (requires libcurl)"                        OFF)
 option(ENABLE_CPPTRACE                "Enables cpptrace stack tracing; can be disabled if using other tools like GDB"                 ON)
+option(USE_ACHIEVEMENTS                "Enable the achievement system (experimental)"                                                 OFF)
+option(USE_ACHIEVEMENTS_ENABLE_ALL     "Enable additional, always-on stat-tracking achievement criteria (perf cost)"                   OFF)
+# TODO: change later: deduce from config file instead of a compile-time flag.
+option(USE_ACHIEVEMENTS_ALLOW_GM       "Allow GM-mode characters to track/reset/complete achievements like normal players"              OFF)
 
 if(USE_EXTRACTORS)
   message(WARNING "USE_EXTRACTORS is deprecated, please use BUILD_EXTRACTORS instead")
@@ -74,6 +78,9 @@ message(STATUS
     ENABLE_MAILSENDER         Enables support for sending emails via sendgrid.com (requires libcurl)
     SUPPORTED_CLIENT_BUILD    Client version the core will support
     ENABLE_CPPTRACE           Enables cpptrace stack tracing; can be disabled if using other tools like GDB
+    USE_ACHIEVEMENTS          Enable the achievement system (experimental)
+    USE_ACHIEVEMENTS_ENABLE_ALL Enable additional, always-on stat-tracking achievement criteria (perf cost)
+    USE_ACHIEVEMENTS_ALLOW_GM Allow GM-mode characters to track/reset/complete achievements like normal players
 
 
   To set an option simply type -D<OPTION>=<VALUE> after 'cmake <srcs>'.

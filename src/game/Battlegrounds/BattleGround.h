@@ -42,6 +42,7 @@ class WorldPacket;
 class BattleGroundMap;
 class ChatHandler;
 class SpellInfo;
+class SpellEntry;
 
 struct WorldSafeLocsEntry;
 
@@ -414,6 +415,11 @@ class BattleGround
         float m_teamStartLocO[BG_TEAMS_COUNT];
 
         uint32 m_playerSkinReflootId;
+
+#ifdef USE_ACHIEVEMENTS
+    public:
+        virtual bool AllNodesConrolledByTeam(TeamId teamId) const { return false; }
+#endif
 };
 
 // helper functions for world state list fill

@@ -40,6 +40,10 @@ BattleGroundAB::BattleGroundAB()
     m_startMessageIds[BG_STARTING_EVENT_SECOND] = BCT_BG_AB_START_ONE_MINUTE;
     m_startMessageIds[BG_STARTING_EVENT_THIRD]  = BCT_BG_AB_START_HALF_MINUTE;
     m_startMessageIds[BG_STARTING_EVENT_FOURTH] = BCT_BG_AB_HAS_BEGUN;
+#ifdef USE_ACHIEVEMENTS
+    _teamScores500Disadvantage[TEAM_ALLIANCE] = false;
+    _teamScores500Disadvantage[TEAM_HORDE] = false;
+#endif
 }
 
 BattleGroundAB::~BattleGroundAB()
@@ -135,6 +139,10 @@ void BattleGroundAB::Update(uint32 diff)
                     UpdateWorldState(BG_AB_OP_RESOURCES_ALLY, m_teamScores[team]);
                 if (team == BG_TEAM_HORDE)
                     UpdateWorldState(BG_AB_OP_RESOURCES_HORDE, m_teamScores[team]);
+#ifdef USE_ACHIEVEMENTS
+                if (m_teamScores[team] > m_teamScores[GetOtherTeam((Team)team)] + 500)
+                    _teamScores500Disadvantage[GetOtherTeam((Team)team)] = true;
+#endif
             }
         }
 
@@ -147,6 +155,13 @@ void BattleGroundAB::Update(uint32 diff)
     // Execute this at the end, since it can delete the BattleGround object!
     BattleGround::Update(diff);
 }
+
+#ifdef USE_ACHIEVEMENTS
+bool BattleGroundAB::AllNodesConrolledByTeam(TeamId teamId) const
+{
+    return _controlledPoints[teamId] == BG_AB_NODES_MAX;
+}
+#endif
 
 void BattleGroundAB::StartingEventCloseDoors()
 {

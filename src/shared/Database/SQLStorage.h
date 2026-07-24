@@ -121,6 +121,10 @@ class SQLStorage : public SQLStorageBase
 
         void Load(bool error_at_empty = true);
         void LoadProgressive(uint32 wow_patch, std::string column_name = "patch", bool error_at_empty = true);
+        // Like LoadProgressive, but for tables where the patch column trails all the columns the
+        // format string consumes (e.g. achievement_dbc, achievement_category_dbc) rather than
+        // immediately following the entry id - see LoadProgressiveTrailingPatch in SQLStorageImpl.h.
+        void LoadProgressiveTrailingPatch(uint32 wow_patch, std::string column_name = "patch", bool error_at_empty = true);
 
         void EraseEntry(uint32 id);
 
@@ -253,6 +257,7 @@ class SQLStorageLoaderBase
     public:
         void Load(StorageClass& storage, bool error_at_empty = true);
         void LoadProgressive(StorageClass& storage, uint32 wow_patch, std::string column_name = "patch", bool error_at_empty = true);
+        void LoadProgressiveTrailingPatch(StorageClass& storage, uint32 wow_patch, std::string column_name = "patch", bool error_at_empty = true);
 
         template<class S, class D>
         void convert(uint32 field_pos, S src, D& dst);

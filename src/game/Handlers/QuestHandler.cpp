@@ -327,6 +327,11 @@ void WorldSession::HandleQuestLogSwapQuest(WorldPackets::Quest::QuestLogSwapQues
 void WorldSession::HandleQuestLogRemoveQuest(WorldPackets::Quest::QuestLogRemoveQuest const& packet)
 {
     _player->RemoveQuestAtSlot(packet.slot);
+#ifdef USE_ACHIEVEMENTS
+
+    _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_QUEST_ABANDONED, 1);
+
+#endif
 }
 
 void WorldSession::HandleQuestConfirmAccept(WorldPackets::Quest::QuestConfirmAccept const& packet)

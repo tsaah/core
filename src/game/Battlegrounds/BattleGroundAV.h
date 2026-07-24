@@ -589,6 +589,15 @@ class BattleGroundAV : public BattleGround
         uint32 m_repSurviveCaptain;
         uint32 m_repSurviveTower;
         ObjectGuid m_shredderOwners[BG_TEAMS_COUNT];
+
+#ifdef USE_ACHIEVEMENTS
+    public:
+        bool IsBothMinesControlledByTeam(TeamId teamId) const;
+        bool IsAllTowersControlledAndCaptainAlive(TeamId teamId) const;
+    private:
+        bool m_CaptainAlive[2] {};
+#endif
+
 };
 
 #endif

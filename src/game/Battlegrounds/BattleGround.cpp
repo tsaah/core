@@ -996,6 +996,13 @@ void BattleGround::RemovePlayerAtLeave(ObjectGuid guid, bool transport, bool sen
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "BATTLEGROUND: Removed player %s from BattleGround.", pPlayer->GetName());
     }
 
+#ifdef USE_ACHIEVEMENTS
+
+    // Xinef: remove all criterias on bg leave
+    pPlayer->ResetAchievementCriteria(ACHIEVEMENT_CRITERIA_CONDITION_BG_MAP, GetMapId(), true);
+
+#endif
+
     //battleground object will be deleted next BattleGround::Update() call
 }
 
@@ -1056,6 +1063,13 @@ void BattleGround::AddPlayer(Player* pPlayer)
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_6_1
     SendPacketToTeam(team, sBattleGroundMgr.BuildPlayerJoinedBattleGroundPacket(pPlayer), pPlayer, false);
+#endif
+
+#ifdef USE_ACHIEVEMENTS
+
+    // Xinef: reset all map criterias on map enter
+    pPlayer->ResetAchievementCriteria(ACHIEVEMENT_CRITERIA_CONDITION_BG_MAP, GetMapId(), true);
+
 #endif
 
     // setup BG group membership

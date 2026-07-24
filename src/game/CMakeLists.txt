@@ -46,6 +46,9 @@ set (game_SRCS
     UnitAuraProcHandler.cpp
     Weather.cpp
     World.cpp
+    Achievements/AchievementMgr.cpp
+    Achievements/AchievementScriptMgr.cpp
+    Achievements/achievement_scripts.cpp
     AI/BasicAI.cpp
     AI/CreatureAI.cpp
     AI/CreatureAIRegistry.cpp
@@ -81,6 +84,7 @@ set (game_SRCS
     Chat/MasterPlayer.cpp
     Chat/MasterPlayerChat.cpp
     Commands/AccountCommands.cpp
+    Commands/AchievementCommands.cpp
     Commands/CharacterCommands.cpp
     Commands/CreatureCommands.cpp
     Commands/DebugCommands.cpp
@@ -285,6 +289,8 @@ set (game_SRCS
     Weather.h
     World.h
     WorldStates.h
+    Achievements/AchievementMgr.h
+    Achievements/AchievementScriptMgr.h
     AI/BasicAI.h
     AI/CreatureAI.h
     AI/CreatureAIImpl.h
@@ -631,6 +637,20 @@ target_link_libraries(game
   Detour
   g3dlite
 )
+
+# PUBLIC: Player.h gates actual class members behind #ifdef USE_ACHIEVEMENTS, and `game` is a
+# static lib consumed by both `scripts` and `mangosd` — every translation unit that includes
+# Player.h must agree on whether the macro is defined, or it's an ODR violation.
+if(USE_ACHIEVEMENTS)
+  target_compile_definitions(game PUBLIC USE_ACHIEVEMENTS)
+endif()
+if(USE_ACHIEVEMENTS_ENABLE_ALL)
+  target_compile_definitions(game PUBLIC USE_ACHIEVEMENTS_ENABLE_ALL)
+endif()
+# TODO: change later: deduce from config file instead of a compile-time flag.
+if(USE_ACHIEVEMENTS_ALLOW_GM)
+  target_compile_definitions(game PUBLIC USE_ACHIEVEMENTS_ALLOW_GM)
+endif()
 
 #add_dependencies(game revision.h)
 

@@ -94,6 +94,18 @@ class ReputationMgr
         ReputationRank GetRank(FactionEntry const* factionEntry) const;
         ReputationRank GetBaseRank(FactionEntry const* factionEntry) const;
 
+#ifdef USE_ACHIEVEMENTS
+
+        // Faction counts by standing tier, used by the achievement criteria types of the same
+        // name (GAIN_EXALTED/REVERED/HONORED_REPUTATION, KNOWN_FACTIONS). The tier counts are
+        // inclusive of higher tiers (e.g. an exalted faction also counts toward "revered").
+        uint32 GetExaltedFactionCount() const;
+        uint32 GetReveredFactionCount() const;
+        uint32 GetHonoredFactionCount() const;
+        uint32 GetVisibleFactionCount() const;
+
+#endif
+
         ReputationRank const* GetForcedRankIfAny(FactionTemplateEntry const* factionTemplateEntry) const
         {
             ForcedReactions::const_iterator forceItr = m_forcedReactions.find(factionTemplateEntry->faction);
