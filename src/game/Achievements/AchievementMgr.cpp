@@ -2275,6 +2275,12 @@ void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
     if (achievement->flags & ACHIEVEMENT_FLAG_COUNTER || HasAchieved(achievement->ID))
         return;
 
+    // Retired (obsoleted-to-Feats-of-Strength) achievements can no longer be newly earned --
+    // players who already had it before retirement keep it (HasAchieved check above), but
+    // criteria completing after the fact must not grant it. See AchievementGlobalMgr::LoadAchievementRetirements().
+    if (sAchievementMgr->IsAchievementRetired(achievement->ID))
+        return;
+
     if (achievement && achievement->name[0]) {
         // sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "achievement AchievementMgr::CompletedAchievement(%u) %s [%s] x%u points", achievement->ID, m_player->GetName(), achievement->name[0], achievement->points);
         std::string breadCrumbs;
@@ -2959,6 +2965,131 @@ void AchievementGlobalMgr::LoadAchievementReferenceList()
     }
 
     sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", ">> Loaded %u achievement references in %u ms", count, WorldTimer::getMSTimeDiffToNow(oldMSTime));
+    sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", " ");
+}
+
+void AchievementGlobalMgr::LoadAchievementRetirements()
+{
+    uint32 oldMSTime = WorldTimer::getMSTime();
+
+    m_retiredAchievementIds.clear();
+
+    const auto result = WorldDatabase.Query("SELECT retired_achievement_id, replacement_achievement_id, patch FROM achievement_retirement");
+
+    if (!result)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", ">> Loaded 0 achievement retirements. DB table `achievement_retirement` is empty.");
+        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", " ");
+        return;
+    }
+
+    struct RetirementRow
+    {
+        uint32 replacementId;
+        uint32 patch;
+    };
+    typedef std::unordered_map<uint32 /*retiredId*/, RetirementRow> RetirementMap;
+    RetirementMap retirements;
+    std::unordered_map<uint32 /*replacementId*/, uint32 /*retiredId*/> replacementOf;
+
+    do
+    {
+        Field* fields = result->Fetch();
+        uint32 retiredId = fields[0].GetUInt32();
+        uint32 replacementId = fields[1].GetUInt32(); // 0 when NULL (pure sunset, no replacement)
+        uint32 patch = fields[2].GetUInt8();
+
+        if (!sAchievementStore.LookupEntry<AchievementEntry>(retiredId))
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "sql.sql Table `achievement_retirement` has a row for non-existing achievement (Entry: %u), ignore.", retiredId);
+            continue;
+        }
+        if (replacementId && !sAchievementStore.LookupEntry<AchievementEntry>(replacementId))
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "sql.sql Table `achievement_retirement` has a non-existing replacement_achievement_id (%u) for retired achievement %u, ignoring the replacement.", replacementId, retiredId);
+            replacementId = 0;
+        }
+
+        RetirementRow row;
+        row.replacementId = replacementId;
+        row.patch = patch;
+        retirements[retiredId] = row;
+        if (replacementId)
+            replacementOf[replacementId] = retiredId;
+    } while (result->NextRow());
+
+    // Pass 1 (resolve, read-only): retirements can chain (Z <- A <- B <- C) -- for each
+    // retirement, walk backward through however many hops it takes to reach the lineage's
+    // original achievement (the one that was never itself a replacement), and read THAT
+    // achievement's current, unmutated parentAchievement/points. Safe to read before any
+    // mutation happens below: a chain root is by definition never anyone's replacement, so
+    // nothing in pass 2 ever rewrites it. Both values come from the same root/same walk, so
+    // one map serves both rather than resolving the chain twice.
+    struct ResolvedRoot
+    {
+        uint32 parentAchievement;
+        uint32 points;
+    };
+    std::unordered_map<uint32 /*retiredId*/, ResolvedRoot> resolvedRoot;
+    for (RetirementMap::const_iterator itr = retirements.begin(); itr != retirements.end(); ++itr)
+    {
+        uint32 root = itr->first;
+        uint32 guard = 0;
+        while (guard < 20)
+        {
+            std::unordered_map<uint32, uint32>::const_iterator replItr = replacementOf.find(root);
+            if (replItr == replacementOf.end())
+                break;
+            root = replItr->second;
+            ++guard;
+        }
+
+        AchievementEntry const* rootEntry = sAchievementStore.LookupEntry<AchievementEntry>(root);
+        ResolvedRoot resolved;
+        resolved.parentAchievement = rootEntry ? rootEntry->parentAchievement : 0;
+        resolved.points = rootEntry ? rootEntry->points : 0;
+        resolvedRoot[itr->first] = resolved;
+    }
+
+    // Pass 2 (apply): mutate categoryId/parentAchievement/points only for currently-active
+    // retirements (patch <= sWorld.GetWowPatch()), and record them for
+    // AchievementMgr::CompletedAchievement()'s earnability gate. Points are zeroed on the
+    // retired entry and transferred to the replacement exactly like parentAchievement above --
+    // a real Feats of Strength entry is worth 0 points, and the replacement carries the
+    // original point value forward so a player who already banked it (or later earns the
+    // replacement) isn't shorted or double-counted.
+    uint32 count = 0;
+    for (RetirementMap::const_iterator itr = retirements.begin(); itr != retirements.end(); ++itr)
+    {
+        uint32 retiredId = itr->first;
+        RetirementRow const& row = itr->second;
+
+        if (row.patch > sWorld.GetWowPatch())
+            continue; // not yet in effect at this server's current content patch
+
+        AchievementEntry* retired = const_cast<AchievementEntry*>(sAchievementStore.LookupEntry<AchievementEntry>(retiredId));
+        if (!retired)
+            continue;
+
+        retired->categoryId = ACHIEVEMENT_CATEGORY_FEATS_OF_STRENGTH;
+        retired->parentAchievement = 0;
+        retired->points = 0;
+        m_retiredAchievementIds.insert(retiredId);
+
+        if (row.replacementId)
+        {
+            AchievementEntry* replacement = const_cast<AchievementEntry*>(sAchievementStore.LookupEntry<AchievementEntry>(row.replacementId));
+            if (replacement)
+            {
+                replacement->parentAchievement = resolvedRoot[retiredId].parentAchievement;
+                replacement->points = resolvedRoot[retiredId].points;
+            }
+        }
+
+        ++count;
+    }
+
+    sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", ">> Loaded %u achievement retirements in %u ms", count, WorldTimer::getMSTimeDiffToNow(oldMSTime));
     sLog.Out(LOG_BASIC, LOG_LVL_BASIC, " server.loading", " ");
 }
 
