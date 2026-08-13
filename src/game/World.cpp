@@ -1669,6 +1669,9 @@ void World::SetInitialWorldSettings()
     sAchievementCategoryStore.LoadProgressiveTrailingPatch(sWorld.GetWowPatch());
     sAchievementCriteriaStore.Load();
 
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Retirements...");
+    sAchievementMgr->LoadAchievementRetirements();
+
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievements...");
     sAchievementMgr->LoadAchievementReferenceList();
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Criteria Lists...");

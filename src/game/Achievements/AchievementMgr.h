@@ -7,6 +7,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <chrono>
 
@@ -756,7 +757,8 @@ enum AchievementCriteriaDataType
 enum AchievementCommonCategories
 {
     ACHIEVEMENT_CATEOGRY_GENERAL                       = -1,
-    ACHIEVEMENT_CATEGORY_STATISTICS                    =  1
+    ACHIEVEMENT_CATEGORY_STATISTICS                    =  1,
+    ACHIEVEMENT_CATEGORY_FEATS_OF_STRENGTH             = 81
 };
 
 class Player;
@@ -1090,11 +1092,22 @@ public:
     void LoadCompletedAchievements();
     void LoadRewards();
     void LoadRewardLocales();
+    void LoadAchievementRetirements();
 
     [[nodiscard]] AchievementEntry const* GetAchievement(uint32 achievementId) const;
+    [[nodiscard]] bool IsAchievementRetired(uint32 achievementId) const
+    {
+        return m_retiredAchievementIds.find(achievementId) != m_retiredAchievementIds.end();
+    }
 
 private:
     AchievementCriteriaDataMap m_criteriaDataMap;
+
+    // Currently-active (patch <= sWorld.GetWowPatch()) achievement_retirement rows -- populated
+    // by LoadAchievementRetirements(), which also overrides categoryId/parentAchievement in
+    // sAchievementStore for these ids. Consulted by AchievementMgr::CompletedAchievement() to
+    // block new completions of retired achievements.
+    std::unordered_set<uint32> m_retiredAchievementIds;
 
     // store achievement criterias by type to speed up lookup
     AchievementCriteriaEntryList m_AchievementCriteriasByType[ACHIEVEMENT_CRITERIA_TYPE_TOTAL];
