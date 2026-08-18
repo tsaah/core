@@ -1017,9 +1017,20 @@ public:
     void getCharacterCriteria(WorldSession* session) const;
     void getCharacterAchievements(WorldSession* session) const;
 
-    // Handles inbound messages from the companion achievement addon, sent over the real
-    // addon chat channel (SendAddonMessage with prefix "ACHI"), payload semicolon-joined,
-    // e.g. "HELLO;<addonVersion>;<lastDynamicDataTimestamp>".
+    // Handles inbound messages from the companion achievement addon. NOT real
+    // CHAT_MSG_ADDON/SendAddonMessage traffic (that would arrive as LANG_ADDON and never
+    // reach here at all -- see the non-LANG_ADDON branch in
+    // WorldSession::HandleChatMessageOpcode, ChatHandler.cpp, which is this function's only
+    // caller). A real addon message can't be used for this on either supported client:
+    // vanilla 1.12.x's SendAddonMessage has no target parameter at all (added in patch 2.1,
+    // so it can only reach PARTY/RAID/GUILD/BATTLEGROUND, never an arbitrary channel), and
+    // Classic Era clients had CHANNEL removed as a valid SendAddonMessage chatType entirely
+    // in patch 1.13.3 (Blizzard's own anti-spam change, not proxy/version-specific). So the
+    // addon instead sends a PLAIN chat message (SendChatMessage) to its own dedicated
+    // channel, manually formatted to mimic real addon-message wire shape: prefix "ACHI",
+    // then a literal TAB character, then a semicolon-joined payload, e.g.
+    // "HELLO;<addonVersion>;<lastDynamicDataTimestamp>". The tab is what this function
+    // actually keys off of (rawMessage.find('\t')) to recognize the message.
     // Returns true if the message was recognized as ours (and should not be broadcast).
     bool HandleAddonMessage(WorldSession* session, std::string const& rawMessage) const;
 
@@ -1028,6 +1039,13 @@ public:
     // per row, so the addon can catch up on dynamic data since its last HELLO. Finishes with
     // a terminating "ACHI;HELLO_DONE" sentinel message.
     void sendDynamicDataUpdate(WorldSession* session, uint32 sinceTimestamp) const;
+
+    // Sends EVERY character_achievement / character_achievement_progress row for `session`'s
+    // player, unfiltered by date, as "ACHI;SYNC_AC;..."/"ACHI;SYNC_CR;..." system messages,
+    // terminated by "ACHI;SYNC_DONE" -- an on-demand full resync (the addon's Options-panel
+    // "Sync" button), distinct from sendDynamicDataUpdate's incremental HELLO_UPDATE trickle so
+    // the client can tell "authoritative full replace" apart from "routine catch-up".
+    void sendFullSync(WorldSession* session) const;
 
     [[nodiscard]] AchievementCriteriaEntryList const* GetAchievementCriteriaByType(AchievementCriteriaTypes type) const
     {

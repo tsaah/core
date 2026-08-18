@@ -2685,6 +2685,48 @@ void AchievementGlobalMgr::sendDynamicDataUpdate(WorldSession* session, uint32 s
     ChatHandler(session).PSendSysMessage("ACHI;HELLO_DONE");
 }
 
+void AchievementGlobalMgr::sendFullSync(WorldSession* session) const {
+    const auto playerGuid = session->GetPlayer()->GetGUIDLow();
+
+    std::unique_ptr<QueryResult> achievementResult(CharacterDatabase.PQuery(
+        "SELECT `achievement`, `date` FROM `character_achievement` WHERE `guid` = '%u'",
+        playerGuid));
+    if (achievementResult) {
+        do {
+            Field* fields = achievementResult->Fetch();
+            uint32 achievementId = fields[0].GetUInt16();
+            uint32 date = fields[1].GetUInt32();
+
+            if (!sAchievementStore.LookupEntry<AchievementEntry>(achievementId))
+                continue;
+
+            ChatHandler(session).PSendSysMessage("ACHI;SYNC_AC;%u;%u", achievementId, date);
+        } while (achievementResult->NextRow());
+    }
+
+    std::unique_ptr<QueryResult> criteriaResult(CharacterDatabase.PQuery(
+        "SELECT `criteria`, `counter`, `date` FROM `character_achievement_progress` WHERE `guid` = '%u'",
+        playerGuid));
+    if (criteriaResult) {
+        do {
+            Field* fields = criteriaResult->Fetch();
+            uint32 id = fields[0].GetUInt16();
+            uint32 counter = fields[1].GetUInt32();
+            uint32 date = fields[2].GetUInt32();
+
+            AchievementCriteriaEntry const* criteria = sAchievementCriteriaStore.LookupEntry<AchievementCriteriaEntry>(id);
+            if (!criteria)
+                continue;
+            if (criteria->timeLimit && time_t(date + criteria->timeLimit) < time(nullptr))
+                continue;
+
+            ChatHandler(session).PSendSysMessage("ACHI;SYNC_CR;%u;%u;%u", id, counter, date);
+        } while (criteriaResult->NextRow());
+    }
+
+    ChatHandler(session).PSendSysMessage("ACHI;SYNC_DONE");
+}
+
 bool AchievementGlobalMgr::HandleAddonMessage(WorldSession* session, std::string const& rawMessage) const {
     // Real SendAddonMessage traffic is wire-formatted as "<prefix>\t<payload>".
     // The addon registers "ACHI" as its real addon message prefix.
@@ -2716,6 +2758,14 @@ bool AchievementGlobalMgr::HandleAddonMessage(WorldSession* session, std::string
             player ? player->GetName() : "<unknown>", addonVersion.c_str(), lastDynamicDataTimestamp);
 
         sendDynamicDataUpdate(session, lastDynamicDataTimestamp);
+    } else if (subType == "SYNC") {
+        std::string const& addonVersion = tokens[1];
+
+        Player* player = session->GetPlayer();
+        sLog.Out(LOG_BASIC, LOG_LVL_BASIC, "AchievementGlobalMgr::HandleAddonMessage: SYNC from %s - addon version %s",
+            player ? player->GetName() : "<unknown>", addonVersion.c_str());
+
+        sendFullSync(session);
     }
 
     return true;
