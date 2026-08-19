@@ -19,9 +19,7 @@ CREATE TABLE `achievement_retirement` (
   PRIMARY KEY (`retired_achievement_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci ROW_FORMAT=FIXED COMMENT='Achievment system - retires an achievement into Feats of Strength once its replacement patch is reached';
 
--- Dumping data for table mangos.achievement_retirement: 1 rows
-INSERT INTO `achievement_retirement` (`retired_achievement_id`, `replacement_achievement_id`, `patch`) VALUES
-	(4826, 4828, 1);
+-- Dumping data for table mangos.achievement_retirement: 0 rows
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
