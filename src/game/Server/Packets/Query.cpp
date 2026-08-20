@@ -23,7 +23,7 @@ void WorldPackets::Query::QueryPageText::ReadFromWorldPacket(WorldPacket& recv_d
     recv_data >> pageID;
     if (recv_data.rpos() < recv_data.size())
     { // optional, see 5875 at 0x0056485D
-        recv_data.read_skip<uint64>(); // object guid, not used
+        recv_data >> guid;
     }
 }
 

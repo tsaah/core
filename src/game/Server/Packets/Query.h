@@ -43,6 +43,8 @@ namespace WorldPackets { namespace Query
     {
     public:
         uint32 pageID = 0;
+        ObjectGuid guid; // optional (client build 5875/1.12.1): source object's guid -
+                          // GameObject (world sign/book) or Item (bag page-text). Empty if absent.
 
         explicit QueryPageText() : ClientPacket(CMSG_PAGE_TEXT_QUERY) {}
         void ReadFromWorldPacket(WorldPacket& recv_data) override;
