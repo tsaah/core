@@ -30,6 +30,8 @@
 #include "ObjectMgr.h"
 #include "ObjectGuid.h"
 #include "Player.h"
+#include "GameObject.h"
+#include "Map.h"
 
 void WorldSession::SendNameQueryOpcode(Player* p)
 {
@@ -262,6 +264,26 @@ void WorldSession::HandleNpcTextQueryOpcode(WorldPackets::Npc::NpcTextQuery cons
 
 void WorldSession::HandlePageTextQueryOpcode(WorldPackets::Query::QueryPageText const& packet)
 {
+#ifdef USE_ACHIEVEMENTS
+    // GAMEOBJECT_TYPE_TEXT ("readable" signs/books, e.g. the "Well Read" achievement's book
+    // list) never go through WorldSession::HandleGameObjectUseOpcode / CMSG_GAMEOBJ_USE - the
+    // client goes straight to CMSG_PAGE_TEXT_QUERY once it already knows the pageID, so this is
+    // the only reliable per-read signal for ACHIEVEMENT_CRITERIA_TYPE_USE_GAMEOBJECT on this
+    // type. Reuses the same PlayerCanUse/IsAtInteractDistance guards as the CMSG_GAMEOBJ_USE
+    // path so a modified client can't spoof credit with an arbitrary remembered guid.
+    if (packet.guid.IsGameObject())
+    {
+        if (GameObject* go = _player->GetMap()->GetGameObject(packet.guid))
+        {
+            if (go->GetGoType() == GAMEOBJECT_TYPE_TEXT && !go->IsDeleted() && go->isSpawned() &&
+                go->IsAtInteractDistance(_player) && go->PlayerCanUse(_player))
+            {
+                _player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_USE_GAMEOBJECT, go->GetEntry());
+            }
+        }
+    }
+#endif
+
     uint32 pageID = packet.pageID;
     while (pageID)
     {
