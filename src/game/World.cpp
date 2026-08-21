@@ -1669,20 +1669,20 @@ void World::SetInitialWorldSettings()
     sAchievementCategoryStore.LoadProgressiveTrailingPatch(sWorld.GetWowPatch());
     sAchievementCriteriaStore.Load();
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Retirements...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievement Retirements...");
     sAchievementMgr->LoadAchievementRetirements();
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievements...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievements...");
     sAchievementMgr->LoadAchievementReferenceList();
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Criteria Lists...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievement Criteria Lists...");
     sAchievementMgr->LoadAchievementCriteriaList();
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Criteria Data...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievement Criteria Data...");
     sAchievementMgr->LoadAchievementCriteriaData();
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Rewards...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievement Rewards...");
     sAchievementMgr->LoadRewards();
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Achievement Reward Locales...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Achievement Reward Locales...");
     sAchievementMgr->LoadRewardLocales();
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "server.loading", "Loading Completed Achievements...");
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading Completed Achievements...");
     sAchievementMgr->LoadCompletedAchievements();
 
 #endif
