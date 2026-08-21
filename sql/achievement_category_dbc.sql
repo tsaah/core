@@ -37,7 +37,7 @@ CREATE TABLE `achievement_category_dbc` (
   PRIMARY KEY (`ID`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_uca1400_ai_ci;
 
--- Dumping data for table mangos.achievement_category_dbc: 86 rows
+-- Dumping data for table mangos.achievement_category_dbc: 88 rows
 INSERT INTO `achievement_category_dbc` (`ID`, `Parent`, `Name_Lang_enUS`, `Name_Lang_enGB`, `Name_Lang_koKR`, `Name_Lang_frFR`, `Name_Lang_deDE`, `Name_Lang_enCN`, `Name_Lang_zhCN`, `Name_Lang_enTW`, `Name_Lang_zhTW`, `Name_Lang_esES`, `Name_Lang_esMX`, `Name_Lang_ruRU`, `Name_Lang_ptPT`, `Name_Lang_ptBR`, `Name_Lang_itIT`, `Name_Lang_Unk`, `Name_Lang_Mask`, `Ui_Order`, `patch`) VALUES
 	(1, -1, 'Statistics', '', '', '', '', '', '属性', '', '', '', '', '', '', '', '', '', 16712190, 10, 0),
 	(21, 1, 'Player vs. Player', '', '', '', '', '', 'PvP', '', '', '', '', '', '', '', '', '', 16712190, 10, 0),
@@ -87,6 +87,8 @@ INSERT INTO `achievement_category_dbc` (`ID`, `Parent`, `Name_Lang_enUS`, `Name_
 	(187, 155, 'Love is in the Air', '', '', '', '', '', '情人节', '', '', '', '', '', '', '', '', '', 16712190, 2, 7),
 	(191, 130, 'Gear', '', '', '', '', '', '装备', '', '', '', '', '', '', '', '', '', 16712190, 4, 0),
 	(201, -1, 'Reputation', '', '', '', '', '', '声望', '', '', '', '', '', '', '', '', '', 16712190, 7, 0),
+	(205, 168, 'Dungeons', NULL, NULL, NULL, NULL, NULL, '地下城 ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 16712190, 0, 0),
+	(206, 168, 'Raids ', NULL, NULL, NULL, NULL, NULL, '团队副本', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 16712190, 1, 0),
 	(14777, 97, 'Eastern Kingdoms', '', '', '', '', '', '东部王国', '', '', '', '', '', '', '', '', '', 16712190, 1, 0),
 	(14778, 97, 'Kalimdor', '', '', '', '', '', '卡利姆多', '', '', '', '', '', '', '', '', '', 16712190, 2, 0),
 	(14779, 97, 'Outland', '', '', '', '', '', '外域', '', '', '', '', '', '', '', '', '', 16712190, 3, 255),
