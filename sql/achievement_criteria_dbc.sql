@@ -47,7 +47,7 @@ CREATE TABLE `achievement_criteria_dbc` (
   PRIMARY KEY (`ID`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_uca1400_ai_ci;
 
--- Dumping data for table mangos.achievement_criteria_dbc: 7464 rows
+-- Dumping data for table mangos.achievement_criteria_dbc: 7472 rows
 INSERT INTO `achievement_criteria_dbc` (`ID`, `Achievement_Id`, `Type`, `Asset_Id`, `Quantity`, `Start_Event`, `Start_Asset`, `Fail_Event`, `Fail_Asset`, `Description_Lang_enUS`, `Description_Lang_enGB`, `Description_Lang_koKR`, `Description_Lang_frFR`, `Description_Lang_deDE`, `Description_Lang_enCN`, `Description_Lang_zhCN`, `Description_Lang_enTW`, `Description_Lang_zhTW`, `Description_Lang_esES`, `Description_Lang_esMX`, `Description_Lang_ruRU`, `Description_Lang_ptPT`, `Description_Lang_ptBR`, `Description_Lang_itIT`, `Description_Lang_Unk`, `Description_Lang_Mask`, `Flags`, `Timer_Start_Event`, `Timer_Asset_Id`, `Timer_Time`, `Ui_Order`) VALUES
 	(34, 6, 5, 0, 10, 0, 0, 0, 0, 'Reach level 10', '', '', '', '', '', '升到10级。', '', '', '', '', '', '', '', '', '', 16712190, 2, 0, 0, 0, 1),
 	(35, 7, 5, 0, 20, 0, 0, 0, 0, 'Reach level 20', '', '', '', '', '', '升到20级。', '', '', '', '', '', '', '', '', '', 16712190, 2, 0, 0, 0, 1),
@@ -7512,7 +7512,15 @@ INSERT INTO `achievement_criteria_dbc` (`ID`, `Achievement_Id`, `Type`, `Asset_I
 	(13518, 4832, 8, 573, 0, 0, 0, 0, 0, 'Sapphiron\'s Demise', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 5),
 	(13519, 4832, 8, 575, 0, 0, 0, 0, 0, 'Kel\'Thuzad\'s Defeat', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 6),
 	(13533, 4833, 0, 6109, 1, 0, 0, 0, 0, 'Azuregos', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
-	(13534, 4834, 0, 12397, 1, 0, 0, 0, 0, 'Lord Kazzak', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0);
+	(13534, 4834, 0, 12397, 1, 0, 0, 0, 0, 'Lord Kazzak', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13535, 891, 40, 148, 1, 0, 0, 0, 0, 'Horse Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13536, 891, 40, 149, 1, 0, 0, 0, 0, 'Wolf Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13537, 891, 40, 150, 1, 0, 0, 0, 0, 'Tiger Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13538, 891, 40, 152, 1, 0, 0, 0, 0, 'Ram Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13539, 891, 40, 533, 1, 0, 0, 0, 0, 'Raptor Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13540, 891, 40, 553, 1, 0, 0, 0, 0, 'Raptor Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13541, 891, 40, 554, 1, 0, 0, 0, 0, 'Undead Horsemanship', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0),
+	(13542, 891, 40, 713, 1, 0, 0, 0, 0, 'Kodo Riding', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2, 0, 0, 0, 0);
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;

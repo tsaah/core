@@ -1109,14 +1109,15 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST_COUNT:
                 SetCriteriaProgress(achievementCriteria, GetPlayer()->GetRewardedQuestCount());
                 break;
-            // NOT RESTORED - unlike COMPLETE_QUEST_COUNT above, these two depend on APIs that
-            // don't exist anywhere in vmangos at all: World has no GetNextDailyQuestsResetTime(),
-            // and there's no cheap way to enumerate "rewarded quests in zone X" without iterating
-            // every quest template per update. Building that tracking is a real subsystem
-            // addition, not a 1:1 port - left as a known gap rather than a rushed/fragile
-            // implementation.
+            // COMPLETE_DAILY_QUEST_DAILY NOT RESTORED - depends on World::GetNextDailyQuestsResetTime(),
+            // which doesn't exist anywhere in vmangos. Left as a known gap.
             // case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY:
-            // case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE:
+            case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUESTS_IN_ZONE:
+                // AchievementMgr::UpdateAchievementCriteria might also be called on login - skip in this case
+                if (!miscValue1)
+                    continue;
+                SetCriteriaProgress(achievementCriteria, 1, PROGRESS_ACCUMULATE);
+                break;
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_BATTLEGROUND:
                 // AchievementMgr::UpdateAchievementCriteria might also be called on login - skip in this case
                 if (!miscValue1)
