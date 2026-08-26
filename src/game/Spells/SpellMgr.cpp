@@ -1869,10 +1869,25 @@ void SpellMgr::LoadSpellLearnSkills()
                 SpellLearnSkillNode dbc_node;
                 dbc_node.skill    = entry->EffectMiscValue[i];
                 dbc_node.step     = entry->CalculateSimpleValue(SpellEffectIndex(i));
-                if (dbc_node.skill != SKILL_RIDING)
-                    dbc_node.value = 1;
-                else
-                    dbc_node.value = dbc_node.step * 75;
+                switch (dbc_node.skill)
+                {
+                    // riding skills grant full value immediately on learn rather than
+                    // requiring practice, since nothing else ever raises them
+                    case SKILL_RIDING:
+                    case SKILL_RIDING_HORSE:
+                    case SKILL_RIDING_WOLF:
+                    case SKILL_RIDING_TIGER:
+                    case SKILL_RIDING_RAM:
+                    case SKILL_RIDING_RAPTOR:
+                    case SKILL_RIDING_MECHANOSTRIDER:
+                    case SKILL_RIDING_UNDEAD_HORSE:
+                    case SKILL_RIDING_KODO:
+                        dbc_node.value = dbc_node.step * 75;
+                        break;
+                    default:
+                        dbc_node.value = 1;
+                        break;
+                }
                 dbc_node.maxvalue = dbc_node.step * 75;
 
                 mSpellLearnSkills[spell] = dbc_node;
