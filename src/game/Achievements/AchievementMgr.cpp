@@ -1463,9 +1463,9 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                     if (!pProto)
                         continue;
 
-                    // check item level via achievement_criteria_data
+                    // check item quality via achievement_criteria_data
                     AchievementCriteriaDataSet const* data = sAchievementMgr->GetCriteriaDataSet(achievementCriteria);
-                    if (!data || !data->Meets(GetPlayer(), 0, pProto->ItemLevel))
+                    if (!data || !data->Meets(GetPlayer(), 0, pProto->Quality))
                         continue;
 
                     SetCriteriaProgress(achievementCriteria, 1, PROGRESS_ACCUMULATE);
