@@ -569,6 +569,10 @@ void AchievementMgr::Reset()
 
 void AchievementMgr::ResetAchievementCriteria(AchievementCriteriaCondition condition, uint32 value, bool evenIfCriteriaComplete)
 {
+    // PlayerBot characters (party/battleground fillers) don't earn achievements
+    if (m_player->IsBot())
+        return;
+
 #ifndef USE_ACHIEVEMENTS_ALLOW_GM
     // disable for gamemasters with GM-mode enabled
     if (m_player->IsGameMaster())
@@ -883,6 +887,10 @@ static const uint32 achievIdForDungeon[][4] =
  */
 void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, uint32 miscValue1 /*= 0*/, uint32 miscValue2 /*= 0*/, Unit const* unit /*= nullptr*/)
 {
+    // PlayerBot characters (party/battleground fillers) don't earn achievements
+    if (m_player->IsBot())
+        return;
+
 #ifndef USE_ACHIEVEMENTS_ALLOW_GM
     // disable for gamemasters with GM-mode enabled
     if (m_player->IsGameMaster())
@@ -2214,6 +2222,10 @@ void AchievementMgr::UpdateTimedAchievements(uint32 timeDiff)
 
 void AchievementMgr::StartTimedAchievement(AchievementCriteriaTimedTypes type, uint32 entry, uint32 timeLost /*= 0*/)
 {
+    // PlayerBot characters (party/battleground fillers) don't earn achievements
+    if (m_player->IsBot())
+        return;
+
     AchievementCriteriaEntryList const& achievementCriteriaList = sAchievementMgr->GetTimedAchievementCriteriaByType(type);
     for (AchievementCriteriaEntryList::const_iterator i = achievementCriteriaList.begin(); i != achievementCriteriaList.end(); ++i)
     {
@@ -2259,7 +2271,11 @@ void AchievementMgr::RemoveTimedAchievement(AchievementCriteriaTimedTypes type, 
 void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
 {
     if (!GetPlayer()) { return; }
-    
+
+    // PlayerBot characters (party/battleground fillers) don't earn achievements
+    if (m_player->IsBot())
+        return;
+
 #ifndef USE_ACHIEVEMENTS_ALLOW_GM
     // disable for gamemasters with GM-mode enabled
     if (m_player->IsGameMaster())
