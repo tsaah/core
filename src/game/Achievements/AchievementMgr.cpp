@@ -2258,6 +2258,8 @@ void AchievementMgr::RemoveTimedAchievement(AchievementCriteriaTimedTypes type, 
 
 void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
 {
+    if (!GetPlayer()) { return; }
+    
 #ifndef USE_ACHIEVEMENTS_ALLOW_GM
     // disable for gamemasters with GM-mode enabled
     if (m_player->IsGameMaster())
