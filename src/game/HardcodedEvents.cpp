@@ -724,12 +724,6 @@ void ScourgeInvasionEvent::Update()
             HandleActiveCity(VARIABLE_SI_STORMWIND_TIME, now, zone.zoneId);
     }
 
-    // Waiting until all invasions have been loaded. OnEnable will return true
-    // if no invasions are supposed to be started, so this will only be the case if any of the
-    // maps required for a current invasionZone were not yet loaded
-    if (!invasion1Loaded || !invasion2Loaded || !invasion3Loaded || !invasion4Loaded || !invasion5Loaded || !invasion6Loaded)
-        return;
-
     if (!invasion1Loaded)
         invasion1Loaded = OnEnable(ZONEID_TANARIS, VARIABLE_TANARIS_ATTACK_TIME);
 
@@ -747,6 +741,12 @@ void ScourgeInvasionEvent::Update()
 
     if (!invasion6Loaded)
         invasion6Loaded = OnEnable(ZONEID_AZSHARA, VARIABLE_AZSHARA_ATTACK_TIME);
+
+    // Waiting until all invasions have been loaded. OnEnable will return true
+    // if no invasions are supposed to be started, so this will only be the case if any of the
+    // maps required for a current invasionZone were not yet loaded
+    if (!invasion1Loaded || !invasion2Loaded || !invasion3Loaded || !invasion4Loaded || !invasion5Loaded || !invasion6Loaded)
+        return;
 
     for (InvasionZone& zone : invasionPoints)
     {
