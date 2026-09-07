@@ -2078,17 +2078,17 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 case 11189:
                 case 28332:
                 {
+                    // Ownership goes to m_spellmod, so ~Aura frees it if AURA_REMOVE_BY_DELETE skips the unapply.
                     if (Player* pPlayer = target->ToPlayer())
                     {
                         if (apply)
+                            m_spellmod = new SpellModifier(SPELLMOD_RESIST_MISS_CHANCE, SPELLMOD_FLAT, m_modifier.m_amount, GetId(), uint64(0x0000000000000100));
+
+                        if (m_spellmod)
                         {
-                            SpellModifier* mod = new SpellModifier(SPELLMOD_RESIST_MISS_CHANCE, SPELLMOD_FLAT, m_modifier.m_amount, GetId(), uint64(0x0000000000000100));
-                            pPlayer->AddSpellMod(mod, true);
-                        }
-                        else
-                        {
-                            if (SpellModifier *mod = pPlayer->GetSpellMod(SPELLMOD_RESIST_MISS_CHANCE, GetId()))
-                                pPlayer->AddSpellMod(mod, false);
+                            pPlayer->AddSpellMod(m_spellmod, apply);
+                            if (!apply)
+                                m_spellmod = nullptr; // Deleted in Player::AddSpellMod.
                         }
                     }
                     return;
@@ -2097,17 +2097,17 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 case 11094:
                 case 13043:
                 {
+                    // Owned by m_spellmod, see the Frost Warding case above.
                     if (Player* pPlayer = target->ToPlayer())
                     {
                         if (apply)
+                            m_spellmod = new SpellModifier(SPELLMOD_RESIST_MISS_CHANCE, SPELLMOD_FLAT, m_modifier.m_amount, GetId(), uint64(0x0000000000000008));
+
+                        if (m_spellmod)
                         {
-                            SpellModifier *mod = new SpellModifier(SPELLMOD_RESIST_MISS_CHANCE, SPELLMOD_FLAT, m_modifier.m_amount, GetId(), uint64(0x0000000000000008));
-                            pPlayer->AddSpellMod(mod, true);
-                        }
-                        else
-                        {
-                            if (SpellModifier *mod = pPlayer->GetSpellMod(SPELLMOD_RESIST_MISS_CHANCE, GetId()))
-                                pPlayer->AddSpellMod(mod, false);
+                            pPlayer->AddSpellMod(m_spellmod, apply);
+                            if (!apply)
+                                m_spellmod = nullptr; // Deleted in Player::AddSpellMod.
                         }
                     }
                     return;
@@ -7206,6 +7206,8 @@ SpellAuraHolder::~SpellAuraHolder()
     // note: auras in delete list won't be affected since they clear themselves from holder when adding to deletedAuraslist
     for (auto const& aura : m_auras)
         delete aura;
+
+    delete m_auraScript;
 
     delete _pveHeartBeatData;
 }
