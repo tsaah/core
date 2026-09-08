@@ -86,37 +86,37 @@ enum HitInfo
     HITINFO_DEBUG               = 0x00000001,               // 0
     HITINFO_AFFECTS_VICTIM      = 0x00000002,               // 1 no being hit animation on victim without it
     HITINFO_LEFTSWING           = 0x00000004,               // 2
-    HITINFO_UNK3                = 0x00000008,               // 3
+    HITINFO_KILLING_BLOW        = 0x00000008,               // 3 guessed, not seen in sniffs, but they contain no killing blows either
     HITINFO_MISS                = 0x00000010,               // 4
     HITINFO_ABSORB              = 0x00000020,               // 5 plays absorb sound
     HITINFO_RESIST              = 0x00000040,               // 6 resisted atleast some damage
     HITINFO_CRITICALHIT         = 0x00000080,               // 7
-    HITINFO_UNK8                = 0x00000100,               // 8 seen in sniffs
-    HITINFO_UNK9                = 0x00000200,               // 9 seen in sniffs
-    HITINFO_UNK10               = 0x00000400,               // 10 seen in sniffs
-    HITINFO_UNK11               = 0x00000800,               // 11 seen in sniffs
+    HITINFO_ROLLED_DODGE        = 0x00000100,               // 8 guessed, dodge check was made, set on every dodge and on any parry or block in sniffs
+    HITINFO_ROLLED_PARRY        = 0x00000200,               // 9 guessed, parry check was made, never set when attacking from behind, implies HITINFO_ROLLED_DODGE
+    HITINFO_ROLLED_BLOCK        = 0x00000400,               // 10 guessed, block check was made, never set on glancing blows, implies HITINFO_ROLLED_PARRY
+    HITINFO_BLOCK               = 0x00000800,               // 11 used instead of VICTIMSTATE_BLOCKS in sniffs, implies HITINFO_ROLLED_BLOCK
     HITINFO_NO_FLOATING_TEXT    = 0x00001000,               // 12 used with melee spells
     HITINFO_BLOOD_SPURT         = 0x00002000,               // 13 sprays extra blood
     HITINFO_GLANCING            = 0x00004000,               // 14
     HITINFO_CRUSHING            = 0x00008000,               // 15
     HITINFO_NOACTION            = 0x00010000,               // 16
-    HITINFO_UNK17               = 0x00020000,               // 17 seen in sniffs
-    HITINFO_UNK18               = 0x00040000,               // 18 seen in sniffs
+    HITINFO_UNK17               = 0x00020000,               // 17 seen in sniffs, only sent by players, always set on melee spell casts
+    HITINFO_PVP                 = 0x00040000,               // 18 guessed, always set when both attacker and victim are players in sniff, but never with creatures
     HITINFO_SWINGNOHITSOUND     = 0x00080000                // 19
 #else
     HITINFO_NORMALSWING         = 0x00000000,
     HITINFO_MISS                = 0x00000001,               // 0
     HITINFO_AFFECTS_VICTIM      = 0x00000002,               // 1 no being hit animation on victim without it
-    HITINFO_UNK2                = 0x00000004,               // 2 seen in sniffs
+    HITINFO_KILLING_BLOW        = 0x00000004,               // 2 victim died, confirmed by 0.5.3 client and sniffs
     HITINFO_CRITICALHIT         = 0x00000008,               // 3
-    HITINFO_UNK4                = 0x00000010,               // 4 seen in sniffs
-    HITINFO_UNK5                = 0x00000020,               // 5 seen in sniffs
-    HITINFO_UNK6                = 0x00000040,               // 6 seen in sniffs
-    HITINFO_UNK7                = 0x00000080,               // 7 seen in sniffs
+    HITINFO_ROLLED_DAZE         = 0x00000010,               // 4 guessed, only sent by creatures on landed hits, victim almost always had no defense rolls so likely only sent when attacking from behind
+    HITINFO_ROLLED_DODGE        = 0x00000020,               // 5 guessed, dodge check was made, set on every dodge and on any parry or block in sniffs
+    HITINFO_ROLLED_PARRY        = 0x00000040,               // 6 guessed, parry check was made, set on every parry, implies HITINFO_ROLLED_DODGE
+    HITINFO_ROLLED_BLOCK        = 0x00000080,               // 7 guessed, block check was made, set on every block, implies HITINFO_ROLLED_DODGE
     HITINFO_UNK8                = 0x00000100,               // 8
     HITINFO_LEFTSWING           = 0x00000200,               // 9
-    HITINFO_BLOOD_SPURT         = 0x00000400,               // 10 sprays extra blood
-    HITINFO_UNK11               = 0x00000800,               // 11 seen in sniffs
+    HITINFO_BLOOD_SPURT         = 0x00000400,               // 10 sprays extra blood, only when damage is between 20% and 100% of victim max health
+    HITINFO_DAZE                = 0x00000800,               // 11 guessed, only seen together with 0x00000010
     HITINFO_NOACTION            = 0x00001000,               // 12
     HITINFO_DEBUG               = 0x00002000,               // 13
     HITINFO_UNK14               = 0x00004000,               // 14
@@ -124,11 +124,10 @@ enum HitInfo
     HITINFO_ABSORB              = 0x00010000,               // 16 plays absorb sound
     HITINFO_RESIST              = 0x00020000,               // 17 resisted atleast some damage
     HITINFO_NO_FLOATING_TEXT    = 0x00040000,               // 18 used with melee spells
-    HITINFO_UNK19               = 0x00080000,               // 19 seen in sniffs
+    HITINFO_BLOCK               = 0x00080000,               // 19 used instead of VICTIMSTATE_BLOCKS in sniffs, implies HITINFO_ROLLED_BLOCK
     HITINFO_GLANCING            = 0x00100000,               // 20
     HITINFO_CRUSHING            = 0x00200000,               // 21
-    HITINFO_SWINGNOHITSOUND     = 0x00400000,               // 22 seen in sniffs
-    HITINFO_UNK23               = 0x00800000                // 23
+    HITINFO_SWINGNOHITSOUND     = 0x00400000                // 22
 #endif
 };
 
