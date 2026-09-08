@@ -992,8 +992,7 @@ class Unit : public SpellCaster
         void DealMeleeDamage(CalcDamageInfo const* damageInfo, bool durabilityLoss);
         float CalculateDamage(WeaponAttackType attType, bool normalized, uint8 index = 0) const;
         float MeleeDamageBonusTaken(SpellCaster const* pCaster, float pdamage, WeaponAttackType attType, SpellEntry const* spellProto = nullptr, SpellEffectIndex effectIndex = EFFECT_INDEX_0, DamageEffectType damagetype = DIRECT_DAMAGE, uint32 stack = 1, Spell* spell = nullptr, bool flat = true);
-        MeleeHitOutcome RollMeleeOutcomeAgainst(Unit const* pVictim, WeaponAttackType attType) const;
-        MeleeHitOutcome RollMeleeOutcomeAgainst(Unit const* pVictim, WeaponAttackType attType, int32 crit_chance, int32 miss_chance, int32 dodge_chance, int32 parry_chance, int32 block_chance, bool SpellCasted) const;
+        void RollMeleeOutcomeAgainst(CalcDamageInfo* damageInfo) const;
 
         // Extra attacks methods
         void ResetExtraAttacks() { m_extraAttacks = 0; }
