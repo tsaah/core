@@ -1600,6 +1600,52 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, uint32 damage, CalcDamageInfo* da
         damageInfo->HitInfo |= HITINFO_BLOOD_SPURT;
 }
 
+void Unit::RollDazeOutcome(CalcDamageInfo* damageInfo)
+{
+    Unit* pVictim = damageInfo->target;
+
+    // If this is a creature and it attacks from behind it has a probability to daze it's victim
+    if (damageInfo->totalDamage && !IsPlayer() &&
+        !GetCharmerOrOwnerGuid() && !pVictim->HasInArc(this) &&
+        !(pVictim->IsPlayer() && pVictim->GetInvincibilityHpThreshold())) // dont daze player in god mode
+    {
+        // -probability is between 0% and 40%
+        // 20% base chance
+        uint32 victimDefense = pVictim->GetDefenseSkillValue();
+        uint32 attackerMeleeSkill = GetUnitMeleeSkill();
+
+        float probability = 0.0f;
+
+        // there is a newbie protection, at level 10 just 7% base chance; assuming linear function
+        if (pVictim->GetLevel() < 30)
+            probability = 0.65f * pVictim->GetLevel() + 0.5f + ((float)attackerMeleeSkill - (float)victimDefense) * 0.2f;
+        else
+            probability = 20.0f + ((float)attackerMeleeSkill - (float)victimDefense) * 0.2f;
+
+        if (probability > 40.0f)
+            probability = 40.0f;
+
+#if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_9_4
+        damageInfo->HitInfo |= HITINFO_ROLLED_DAZE;
+#endif
+
+        if (roll_chance_f(probability))
+        {
+#if SUPPORTED_CLIENT_BUILD <= CLIENT_BUILD_1_9_4
+            damageInfo->HitInfo |= HITINFO_DAZE;
+#endif
+
+            uint32 spellId = SPELL_ID_DAZE;
+
+            if (pVictim->IsPlayer())
+                if (ChrRacesEntry const* raceEntry = sChrRacesStore.LookupEntry(pVictim->GetRace()))
+                    spellId = raceEntry->dazeSpellId;
+
+            CastSpell(pVictim, spellId, true);
+        }
+    }
+}
+
 void Unit::DealMeleeDamage(CalcDamageInfo const* damageInfo, bool durabilityLoss)
 {
     if (damageInfo == nullptr) return;
@@ -1657,39 +1703,6 @@ void Unit::DealMeleeDamage(CalcDamageInfo const* damageInfo, bool durabilityLoss
     // Call default DealDamage
     CleanDamage cleanDamage(damageInfo->cleanDamage, damageInfo->attackType, damageInfo->hitOutCome, damageInfo->totalAbsorb, damageInfo->totalResist);
     DealDamage(pVictim, damageInfo->totalDamage, &cleanDamage, DIRECT_DAMAGE, SpellSchoolMask(damageInfo->subDamage[0].damageSchoolMask), nullptr, durabilityLoss);
-
-    // If this is a creature and it attacks from behind it has a probability to daze it's victim
-    if (damageInfo->totalDamage && !IsPlayer() &&
-        !((Creature*)this)->GetCharmerOrOwnerGuid() && !pVictim->HasInArc(this) &&
-        !(pVictim->IsPlayer() && pVictim->GetInvincibilityHpThreshold())) // dont daze player in god mode
-    {
-        // -probability is between 0% and 40%
-        // 20% base chance
-        uint32 victimDefense = pVictim->GetDefenseSkillValue();
-        uint32 attackerMeleeSkill = GetUnitMeleeSkill();
-
-        float probability = 0.0f;
-
-        // there is a newbie protection, at level 10 just 7% base chance; assuming linear function
-        if (pVictim->GetLevel() < 30)
-            probability = 0.65f * pVictim->GetLevel() + 0.5f + ((float)attackerMeleeSkill - (float)victimDefense) * 0.2f;
-        else
-            probability = 20.0f + ((float)attackerMeleeSkill - (float)victimDefense) * 0.2f;
-
-        if (probability > 40.0f)
-            probability = 40.0f;
-
-        if (roll_chance_f(probability))
-        {
-            uint32 spellId = SPELL_ID_DAZE;
-
-            if (pVictim->IsPlayer())
-                if (ChrRacesEntry const* raceEntry = sChrRacesStore.LookupEntry(pVictim->GetRace()))
-                    spellId = raceEntry->dazeSpellId;
-
-            CastSpell(pVictim, spellId, true);
-        }
-    }
 
     // update at damage Judgement aura duration that applied by attacker at victim
     if (damageInfo->totalDamage)
@@ -2201,6 +2214,9 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
     CalculateMeleeDamage(pVictim, 0, &damageInfo, attType);
 
     ProcDamageAndSpell(ProcSystemArguments(damageInfo.target, damageInfo.procAttacker, damageInfo.procVictim, damageInfo.procEx, damageInfo.totalDamage, damageInfo.totalDamage + damageInfo.totalAbsorb + damageInfo.totalResist, damageInfo.attackType));
+
+    // Daze cast happens before SMSG_ATTACKERSTATEUPDATE in sniffs.
+    RollDazeOutcome(&damageInfo);
 
     // In sniffs SMSG_ATTACKERSTATEUPDATE is sent after chance on hit spell casts from CastItemCombatSpell. This fixes animation for Frostbrand Attack.
     // Send it before lethal damage so the client can still resolve the victim
