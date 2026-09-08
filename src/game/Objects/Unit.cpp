@@ -1325,16 +1325,16 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, uint32 damage, CalcDamageInfo* da
     uint8 actualDamageCount = feral ? 1 : m_weaponDamageCount[damageInfo->attackType];
     for (uint8 i = 0; i < actualDamageCount; i++)
     {
-        SubDamageInfo* subDamage = &damageInfo->subDamage[i];
+        SubDamageInfo& subDamage = damageInfo->subDamage[i];
 
         // feral only allowed melee school
-        subDamage->damageSchoolMask = IsPlayer() && !feral
+        subDamage.damageSchoolMask = IsPlayer() && !feral
             ? GetSchoolMask(GetWeaponDamageSchool(damageInfo->attackType, i))
             : GetMeleeDamageSchoolMask();
 
-        if (damageInfo->target->IsImmuneToDamage(subDamage->damageSchoolMask))
+        if (damageInfo->target->IsImmuneToDamage(subDamage.damageSchoolMask))
         {
-            subDamage->damage = 0;
+            subDamage.damage = 0;
             continue;
         }
         else
@@ -1343,17 +1343,17 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, uint32 damage, CalcDamageInfo* da
         float fdamage = CalculateDamage(damageInfo->attackType, false, i);
         // Add melee damage bonus
         fdamage = MeleeDamageBonusDone(damageInfo->target, fdamage, damageInfo->attackType, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, nullptr, i == 0);
-        subDamage->damage = rand_dither(damageInfo->target->MeleeDamageBonusTaken(this, rand_dither(fdamage), damageInfo->attackType, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, nullptr, i == 0));
+        subDamage.damage = rand_dither(damageInfo->target->MeleeDamageBonusTaken(this, rand_dither(fdamage), damageInfo->attackType, nullptr, EFFECT_INDEX_0, DIRECT_DAMAGE, 1, nullptr, i == 0));
 
         // Calculate armor reduction
-        if (subDamage->damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
+        if (subDamage.damageSchoolMask == SPELL_SCHOOL_MASK_NORMAL)
         {
-            damageInfo->cleanDamage += subDamage->damage;
-            subDamage->damage = rand_ditheru(CalcArmorReducedDamage(damageInfo->target, subDamage->damage));
-            damageInfo->cleanDamage -= subDamage->damage;
+            damageInfo->cleanDamage += subDamage.damage;
+            subDamage.damage = rand_ditheru(CalcArmorReducedDamage(damageInfo->target, subDamage.damage));
+            damageInfo->cleanDamage -= subDamage.damage;
         }
 
-        damageInfo->totalDamage += subDamage->damage;
+        damageInfo->totalDamage += subDamage.damage;
     }
 
     // Physical Immune check
@@ -1542,47 +1542,60 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, uint32 damage, CalcDamageInfo* da
         // Calculate absorb & resists
         for (uint8 i = 0; i < m_weaponDamageCount[damageInfo->attackType]; i++)
         {
-            SubDamageInfo* subDamage = &damageInfo->subDamage[i];
+            SubDamageInfo& subDamage = damageInfo->subDamage[i];
 
-            damageInfo->target->CalculateDamageAbsorbAndResist(this, subDamage->damageSchoolMask, DIRECT_DAMAGE, subDamage->damage, &subDamage->absorb, &subDamage->resist, nullptr);
+            damageInfo->target->CalculateDamageAbsorbAndResist(this, subDamage.damageSchoolMask, DIRECT_DAMAGE, subDamage.damage, &subDamage.absorb, &subDamage.resist, nullptr);
 
-            uint32 const bonus = (subDamage->resist < 0 ? uint32(std::abs(subDamage->resist)) : 0);
-            subDamage->damage += bonus;
+            uint32 const bonus = (subDamage.resist < 0 ? uint32(std::abs(subDamage.resist)) : 0);
+            subDamage.damage += bonus;
             damageInfo->totalDamage += bonus;
 
-            uint32 const malus = (subDamage->resist > 0 ? (subDamage->absorb + uint32(subDamage->resist)) : subDamage->absorb);
+            uint32 const malus = subDamage.absorb + uint32(std::max(subDamage.resist, 0));
 
-            if (subDamage->damage <= malus)
+            if (subDamage.damage <= malus)
             {
-                damageInfo->totalDamage -= subDamage->damage;
-                subDamage->damage = 0;
+                damageInfo->totalDamage -= subDamage.damage;
+                subDamage.damage = 0;
             }
             else
             {
                 damageInfo->totalDamage -= malus;
-                subDamage->damage -= malus;
+                subDamage.damage -= malus;
             }
 
-            damageInfo->totalAbsorb += subDamage->absorb;
-            damageInfo->totalResist += subDamage->resist;
+            // script hooks
+            damageInfo->totalDamage -= subDamage.damage;
+            DealDamageMods(pVictim, subDamage.damage, &subDamage.absorb);
+            damageInfo->totalDamage += subDamage.damage;
 
-            if (subDamage->absorb)
+            damageInfo->totalAbsorb += subDamage.absorb;
+            damageInfo->totalResist += subDamage.resist;
+
+            if (subDamage.absorb)
             {
                 damageInfo->HitInfo |= HITINFO_ABSORB;
                 damageInfo->procEx |= PROC_EX_ABSORB;
             }
 
-            if (subDamage->resist)
+            if (subDamage.resist)
                 damageInfo->HitInfo |= HITINFO_RESIST;
         }
     }
     else
         damageInfo->totalDamage = 0;
 
+#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_9_4
+    if (IsPlayer() && damageInfo->target->IsPlayer())
+        damageInfo->HitInfo |= HITINFO_PVP;
+#endif
+
     // No animation on victim in this case.
     if (!damageInfo->totalDamage && (damageInfo->HitInfo & (HITINFO_MISS | HITINFO_ABSORB)))
         damageInfo->HitInfo &= ~HITINFO_AFFECTS_VICTIM;
-    // Heavy hits cause more blood to spurt out
+    // Flag used as animation hint in alpha client, not sure if vanilla client uses it.
+    else if (damageInfo->totalDamage >= damageInfo->target->GetHealth())
+        damageInfo->HitInfo |= HITINFO_KILLING_BLOW;
+    // Heavy hits cause more blood to spurt out.
     else if (damageInfo->cleanDamage > (damageInfo->target->GetHealth() * 25 / 100))
         damageInfo->HitInfo |= HITINFO_BLOOD_SPURT;
 }
@@ -2186,13 +2199,6 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
 
     CalcDamageInfo damageInfo;
     CalculateMeleeDamage(pVictim, 0, &damageInfo, attType);
-    // Send log damage message to client
-    for (uint8 i = 0; i < m_weaponDamageCount[attType]; i++)
-    {
-        damageInfo.totalDamage -= damageInfo.subDamage[i].damage;
-        DealDamageMods(pVictim, damageInfo.subDamage[i].damage, &damageInfo.subDamage[i].absorb);
-        damageInfo.totalDamage += damageInfo.subDamage[i].damage;
-    }
 
     ProcDamageAndSpell(ProcSystemArguments(damageInfo.target, damageInfo.procAttacker, damageInfo.procVictim, damageInfo.procEx, damageInfo.totalDamage, damageInfo.totalDamage + damageInfo.totalAbsorb + damageInfo.totalResist, damageInfo.attackType));
 
@@ -2289,12 +2295,15 @@ void Unit::RollMeleeOutcomeAgainst(CalcDamageInfo* damageInfo) const
         if (!pVictim->IsPlayer() && pVictim->GetLevel() < 10)
             dodgeChance *= pVictim->GetLevel() / 10.0f;
 
-        if (dodgeChance > 0 &&                         // check if unit _can_ dodge
-            (roll < (sum += dodgeChance)))
+        if (dodgeChance > 0)
         {
-            DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: DODGE <%d, %d)", sum - tmp, sum);
-            damageInfo->hitOutCome = MELEE_HIT_DODGE;
-            return;
+            damageInfo->HitInfo |= HITINFO_ROLLED_DODGE;
+            if (roll < (sum += dodgeChance))
+            {
+                DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: DODGE <%d, %d)", sum - tmp, sum);
+                damageInfo->hitOutCome = MELEE_HIT_DODGE;
+                return;
+            }
         }
     }
 
@@ -2310,12 +2319,15 @@ void Unit::RollMeleeOutcomeAgainst(CalcDamageInfo* damageInfo) const
             if (!pVictim->IsPlayer() && pVictim->GetLevel() < 10)
                 parryChance *= pVictim->GetLevel() / 10.0f;
 
-            if (parryChance > 0 &&                         // check if unit _can_ parry
-                    (roll < (sum += parryChance)))
+            if (parryChance > 0)
             {
-                DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: PARRY <%d, %d)", sum - parryChance, sum);
-                damageInfo->hitOutCome = MELEE_HIT_PARRY;
-                return;
+                damageInfo->HitInfo |= HITINFO_ROLLED_PARRY;
+                if (roll < (sum += parryChance))
+                {
+                    DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: PARRY <%d, %d)", sum - parryChance, sum);
+                    damageInfo->hitOutCome = MELEE_HIT_PARRY;
+                    return;
+                }
             }
         }
     }
@@ -2365,23 +2377,27 @@ void Unit::RollMeleeOutcomeAgainst(CalcDamageInfo* damageInfo) const
             if (!pVictim->IsPlayer() && pVictim->GetLevel() < 10)
                 blockChance *= pVictim->GetLevel() / 10.0f;
 
-            if (blockChance > 0 &&                         // check if unit _can_ block
-                (roll < (sum += blockChance)))
+            if (blockChance > 0)
             {
-                // Critical chance
-                tmp = critChance;
-                if (IsPlayer() && spellCasted && tmp > 0)
+                damageInfo->HitInfo |= HITINFO_ROLLED_BLOCK;
+                if (roll < (sum += blockChance))
                 {
-                    if (roll_chance_i(tmp / 100))
+                    // Critical chance
+                    tmp = critChance;
+                    damageInfo->HitInfo |= HITINFO_BLOCK;
+                    if (IsPlayer() && spellCasted && tmp > 0)
                     {
-                        sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "RollMeleeOutcomeAgainst: BLOCKED CRIT");
-                        damageInfo->hitOutCome = MELEE_HIT_BLOCK_CRIT;
-                        return;
+                        if (roll_chance_i(tmp / 100))
+                        {
+                            sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "RollMeleeOutcomeAgainst: BLOCKED CRIT");
+                            damageInfo->hitOutCome = MELEE_HIT_BLOCK_CRIT;
+                            return;
+                        }
                     }
+                    DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: BLOCK <%d, %d)", sum - tmp, sum);
+                    damageInfo->hitOutCome = MELEE_HIT_BLOCK;
+                    return;
                 }
-                DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "RollMeleeOutcomeAgainst: BLOCK <%d, %d)", sum - tmp, sum);
-                damageInfo->hitOutCome = MELEE_HIT_BLOCK;
-                return;
             }
         }
     }
