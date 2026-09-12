@@ -5308,6 +5308,7 @@ bool Player::UpdateSkill(uint32 skillId, uint32 step)
 #ifdef USE_ACHIEVEMENTS
 
     UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_REACH_SKILL_LEVEL, skillId);
+    UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LEARN_SKILL_LEVEL, skillId);
 
 #endif
 
@@ -5449,6 +5450,7 @@ bool Player::UpdateSkillPro(uint16 skillId, int32 chance, uint32 step)
 #ifdef USE_ACHIEVEMENTS
 
         UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_REACH_SKILL_LEVEL, skillId);
+        UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LEARN_SKILL_LEVEL, skillId);
 
 #endif
 
