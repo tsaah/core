@@ -1,0 +1,400 @@
+# Run manually from the homebrew/actions branch. development is force-synced to
+# be identical to upstream/development; all homebrew/* branches are rebased onto
+# it, merged into a temporary branch, then built for Linux/Windows and released.
+# Requires TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID repository secrets.
+name: Homebrew Build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: homebrew-build
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: https://github.com/vmangos/core.git
+
+jobs:
+  prepare:
+    name: Sync, rebase and merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      build_branch: ${{ steps.merge.outputs.build_branch }}
+      version: ${{ steps.version.outputs.version }}
+      had_errors: ${{ steps.merge.outputs.had_errors }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || true
+
+      - name: Set version
+        id: version
+        run: echo "version=$(date -u +%s)" >>"$GITHUB_OUTPUT"
+
+      - name: Sync development with upstream
+        run: |
+          set -euo pipefail
+          git fetch --no-tags upstream development
+          git fetch --no-tags origin development
+          git fetch --prune --no-tags origin '+refs/heads/homebrew/*:refs/remotes/origin/homebrew/*'
+
+          old_development="$(git rev-parse origin/development)"
+          git log --reverse --format='%h%x09%s' "origin/development..upstream/development" >upstream-changes.txt
+
+          git push --force-with-lease=refs/heads/development:"$old_development" \
+            origin upstream/development:refs/heads/development
+          git checkout -B development upstream/development
+
+          while IFS= read -r ref; do
+            git push origin --delete "${ref#refs/heads/}" || true
+          done < <(git ls-remote --heads origin 'refs/heads/homebrew-build-*' | cut -f2)
+
+      - name: Rebase homebrew branches
+        run: |
+          set -uo pipefail
+          : >rebase-failures.txt
+          : >rebased-branches.txt
+
+          while IFS= read -r branch; do
+            if ! git checkout -q -B "$branch" "origin/$branch"; then
+              echo "$branch" >>rebase-failures.txt
+              continue
+            fi
+            if git rebase development && git push --force-with-lease origin "$branch"; then
+              echo "$branch" >>rebased-branches.txt
+            else
+              git rebase --abort 2>/dev/null || true
+              echo "$branch" >>rebase-failures.txt
+              git checkout -q development
+            fi
+          done < <(git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin/homebrew/)
+
+          cat rebase-failures.txt
+
+      - name: Merge homebrew branches
+        id: merge
+        run: |
+          set -uo pipefail
+          build_branch="homebrew-build-${{ steps.version.outputs.version }}"
+          : >merge-failures.txt
+
+          if ! git checkout -B "$build_branch" development; then
+            echo "::error::could not create $build_branch"
+            exit 1
+          fi
+
+          while IFS= read -r branch; do
+            if git merge --no-ff -m "Merge $branch into $build_branch" "$branch"; then
+              continue
+            fi
+            git merge --abort 2>/dev/null || true
+            echo "$branch" >>merge-failures.txt
+          done < rebased-branches.txt
+
+          if ! git push origin "$build_branch"; then
+            echo "::error::could not push $build_branch"
+            exit 1
+          fi
+
+          had_errors=0
+          if [ -s rebase-failures.txt ] || [ -s merge-failures.txt ]; then
+            had_errors=1
+          fi
+
+          echo "build_branch=$build_branch" >>"$GITHUB_OUTPUT"
+          echo "had_errors=$had_errors" >>"$GITHUB_OUTPUT"
+
+      - name: Upload run metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-run-meta
+          path: |
+            upstream-changes.txt
+            rebase-failures.txt
+            merge-failures.txt
+          retention-days: 7
+
+      - name: Notify rebase or merge issues
+        if: steps.merge.outputs.had_errors == '1'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          message="⚠️ Homebrew sync: conflicts occurred.
+          Rebase failures: $(tr '\n' ' ' <rebase-failures.txt)
+          Merge failures: $(tr '\n' ' ' <merge-failures.txt)
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          bash .github/scripts/telegram-notify.sh "$message"
+
+      - name: Notify failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -f .github/scripts/telegram-notify.sh ] || exit 0
+          bash .github/scripts/telegram-notify.sh "❌ Homebrew workflow failed in job '${{ github.job }}'.
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  build-linux:
+    name: Build Linux
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Check out merged branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_branch }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            libmysqlclient-dev \
+            libssl-dev \
+            patchelf \
+            zlib1g-dev
+
+      - name: Build release binaries
+        run: |
+          set -euo pipefail
+          mkdir -p build _install
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/_install" \
+            -DBUILD_EXTRACTORS=1 \
+            -DBUILD_FOR_HOST_CPU=0 \
+            -DCONF_DIR:STRING=./etc \
+            -DDEBUG_SYMBOLS=0
+          make -j"$(nproc)"
+          make install
+
+      - name: Package release archive
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: ./.github/scripts/package-linux-release.sh _install "homebrew-linux-amd64-$VERSION.tar.gz"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-linux-build
+          path: bin/homebrew-linux-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Notify failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -f .github/scripts/telegram-notify.sh ] || exit 0
+          bash .github/scripts/telegram-notify.sh "❌ Homebrew Linux build failed.
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  build-windows:
+    name: Build Windows
+    needs: prepare
+    runs-on: windows-2022
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Check out merged branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_branch }}
+
+      - name: Build release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DBUILD_EXTRACTORS=1 \
+            -DBUILD_WARNINGS_AS_ERROR=1 \
+            -G "Visual Studio 17 2022" \
+            -A x64
+          "/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe" "MaNGOS.sln" //p:Platform=x64 //p:Configuration=Release //m
+
+      - name: Package release archive
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: ./.github/scripts/package-windows-release.sh x64 "homebrew-windows-amd64-$VERSION.zip"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-windows-build
+          path: bin/homebrew-windows-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Notify failure
+        if: failure()
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -f .github/scripts/telegram-notify.sh ] || exit 0
+          bash .github/scripts/telegram-notify.sh "❌ Homebrew Windows build failed.
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  release:
+    name: Publish release
+    needs: [prepare, build-linux, build-windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out merged branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.build_branch }}
+          fetch-depth: 0
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: homebrew-*-build
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download run metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: homebrew-run-meta
+          path: run-meta
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_BRANCH: ${{ needs.prepare.outputs.build_branch }}
+          HAD_ERRORS: ${{ needs.prepare.outputs.had_errors }}
+          UPSTREAM_URL: https://github.com/vmangos/core
+        run: |
+          set -euo pipefail
+          {
+            echo "Homebrew build from \`$BUILD_BRANCH\` (unix timestamp \`$VERSION\`)."
+            echo
+            if [ "$HAD_ERRORS" = "1" ]; then
+              echo "> [!WARNING]"
+              echo "> Conflicts occurred during this run; some branches were skipped."
+              echo "> Rebase failures: $(tr '\n' ' ' <run-meta/rebase-failures.txt)"
+              echo "> Merge failures: $(tr '\n' ' ' <run-meta/merge-failures.txt)"
+              echo
+            fi
+            echo "## Upstream commits"
+            echo
+            if [ -s run-meta/upstream-changes.txt ]; then
+              while IFS=$'\t' read -r sha subject; do
+                pr="$(printf '%s' "$subject" | sed -n 's/.*(#\([0-9][0-9]*\)).*/\1/p')"
+                if [ -n "$pr" ]; then
+                  echo "- $sha $subject ([#$pr]($UPSTREAM_URL/pull/$pr))"
+                else
+                  echo "- $sha $subject"
+                fi
+              done <run-meta/upstream-changes.txt
+            else
+              echo "No new upstream commits."
+            fi
+          } >release-notes.md
+
+          shopt -s nullglob
+          assets=(release-assets/*)
+          if [ "${#assets[@]}" -ne 2 ]; then
+            echo "::error::expected 2 release assets, found ${#assets[@]}"
+            exit 1
+          fi
+
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release delete "$VERSION" --yes --cleanup-tag
+          fi
+
+          gh release create "$VERSION" "${assets[@]}" \
+            --target "$BUILD_BRANCH" \
+            --title "Homebrew build $VERSION" \
+            --notes-file release-notes.md
+
+      - name: Notify result
+        if: success()
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          HAD_ERRORS: ${{ needs.prepare.outputs.had_errors }}
+          UPSTREAM_URL: https://github.com/vmangos/core
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          {
+            if [ "$HAD_ERRORS" = "1" ]; then
+              echo "⚠️ Homebrew build $VERSION released with conflicts."
+              echo "Rebase failures: $(tr '\n' ' ' <run-meta/rebase-failures.txt)"
+              echo "Merge failures: $(tr '\n' ' ' <run-meta/merge-failures.txt)"
+            else
+              echo "✅ Homebrew build $VERSION released."
+            fi
+            echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$VERSION"
+            total="$(wc -l <run-meta/upstream-changes.txt)"
+            echo "Upstream commits: $total"
+            echo
+            head -25 run-meta/upstream-changes.txt | while IFS=$'\t' read -r sha subject; do
+              pr="$(printf '%s' "$subject" | sed -n 's/.*(#\([0-9][0-9]*\)).*/\1/p')"
+              if [ -n "$pr" ]; then
+                echo "- $sha $subject — $UPSTREAM_URL/pull/$pr"
+              else
+                echo "- $sha $subject"
+              fi
+            done
+            if [ "$total" -gt 25 ]; then
+              echo "... and $((total - 25)) more in the release notes."
+            fi
+          } >telegram-message.txt
+          [ -f .github/scripts/telegram-notify.sh ] || exit 0
+          bash .github/scripts/telegram-notify.sh "$(cat telegram-message.txt)"
+
+      - name: Notify failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -f .github/scripts/telegram-notify.sh ] || exit 0
+          bash .github/scripts/telegram-notify.sh "❌ Homebrew release failed.
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  cleanup:
+    name: Delete temporary branch
+    needs: [prepare, release]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Delete temporary branch
+        run: git push origin --delete "${{ needs.prepare.outputs.build_branch }}" || true
