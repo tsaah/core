@@ -14600,7 +14600,11 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     // check if the character's account in the db and the logged in account match.
     // player should be able to load/delete character only with correct account!
-    if (!IsBot() && dbAccountId != GetSession()->GetAccountId())
+    // persistent bots run on a hidden PBOT session account: accept only the recorded real owner account
+    PlayerBotEntry const* pBotEntry = GetSession()->GetBot();
+    bool const wrongAccount = pBotEntry ? (pBotEntry->persistent && dbAccountId != pBotEntry->ownerAccountId)
+                                        : dbAccountId != GetSession()->GetAccountId();
+    if (wrongAccount)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "%s loading from wrong account (is: %u, should be: %u)",
                       guid.GetString().c_str(), GetSession()->GetAccountId(), dbAccountId);
@@ -16387,7 +16391,9 @@ void Player::SaveToDB(bool online, bool force)
                               "?, ?, ?, ?)");
 
     uberInsert.addUInt32(GetGUIDLow());
-    uberInsert.addUInt32(GetSession()->GetAccountId());
+    // persistent bots run on a PBOT session account: the row must stay on the real owner account
+    PlayerBotEntry const* pBotEntry = GetSession()->GetBot();
+    uberInsert.addUInt32(pBotEntry && pBotEntry->persistent && pBotEntry->ownerAccountId ? pBotEntry->ownerAccountId : GetSession()->GetAccountId());
     uberInsert.addString(m_name);
     uberInsert.addUInt8(GetRace());
     uberInsert.addUInt8(GetClass());

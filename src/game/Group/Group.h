@@ -204,11 +204,13 @@ class Group
         typedef MemberSlotList::iterator member_witerator;
         typedef std::set<Player*> InvitesList;
 
+    public:
         typedef std::vector<Roll*> Rolls;
 
-    public:
         Group();
         ~Group();
+
+        Rolls const& GetRolls() const { return RollId; }
 
         // group manipulation methods
         bool   Create(ObjectGuid guid, char const*  name);

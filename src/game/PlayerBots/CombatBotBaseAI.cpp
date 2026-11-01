@@ -1826,6 +1826,9 @@ void CombatBotBaseAI::PopulateSpellData()
 
 void CombatBotBaseAI::AddAllSpellReagents()
 {
+    if (m_persistent)
+        return;
+
     for (const auto& pSpell : m_spells.raw.spells)
     {
         if (pSpell)
@@ -2352,6 +2355,9 @@ void CombatBotBaseAI::SummonPetIfNeeded()
 
             return;
         }
+
+        if (m_persistent)
+            return;
 
         uint32 petId = PickRandomValue( PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
                                         PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
@@ -2881,7 +2887,8 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         (me->IsMoving() || !me->IsStopped()))
         me->StopMoving();
 
-    if ((result == SPELL_FAILED_NEED_AMMO_POUCH ||
+    if (!m_persistent &&
+        (result == SPELL_FAILED_NEED_AMMO_POUCH ||
         result == SPELL_FAILED_ITEM_NOT_READY) &&
         pSpellEntry->Reagent[0])
     {
@@ -2896,6 +2903,9 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
 
 void CombatBotBaseAI::AddItemToInventory(uint32 itemId, uint32 count)
 {
+    if (m_persistent)
+        return;
+
     ItemPosCountVec dest;
     uint8 msg = me->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, count);
     if (msg == EQUIP_ERR_OK)
@@ -2907,6 +2917,9 @@ void CombatBotBaseAI::AddItemToInventory(uint32 itemId, uint32 count)
 
 void CombatBotBaseAI::AddHunterAmmo()
 {
+    if (m_persistent)
+        return;
+
     if (Item* pWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
     {
         if (ItemPrototype const* pWeaponProto = pWeapon->GetProto())
@@ -2957,6 +2970,9 @@ void CombatBotBaseAI::AddHunterAmmo()
 
 void CombatBotBaseAI::EquipOrUseNewItem()
 {
+    if (m_persistent)
+        return;
+
     for (int i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
     {
         Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i);

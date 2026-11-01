@@ -43,14 +43,17 @@ public:
 
     bool OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess) final;
     void OnPlayerLogin() final;
-    void UpdateAI(uint32 const diff) final;
-    void OnPacketReceived(WorldPacket const* packet) final;
+    void UpdateAI(uint32 const diff) override;
+    void OnPacketReceived(WorldPacket const* packet) override;
 
     void CloneFromPlayer(Player const* pPlayer);
     void AddToPlayerGroup();
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
     Player* GetPartyLeader() const;
+    // Hooks for PersistentBotAI: leaderless operation (no follow, no removal when the leader is gone) and own grind targets.
+    virtual bool IsLeaderless() const { return false; }
+    virtual Unit* SelectGrindTarget() { return nullptr; }
     bool AttackStart(Unit* pVictim);
     Unit* SelectAttackTarget(Player* pLeader) const;
     Unit* SelectPartyAttackTarget() const;
@@ -81,7 +84,7 @@ public:
     void UpdateOutOfCombatAI_Mage() final;
     void UpdateInCombatAI_Priest() final;
     void UpdateOutOfCombatAI_Priest() final;
-    void UpdateInCombatAI_Warlock() final;
+    void UpdateInCombatAI_Warlock();
     void UpdateOutOfCombatAI_Warlock() final;
     void UpdateInCombatAI_Warrior() final;
     void UpdateOutOfCombatAI_Warrior() final;

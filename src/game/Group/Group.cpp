@@ -36,6 +36,7 @@
 #include "LootMgr.h"
 #include "LFGMgr.h"
 #include "LFGQueue.h"
+#include "PlayerBotMgr.h"
 #include "UpdateMask.h"
 #include "Utilities/Random.h"
 
@@ -1596,7 +1597,9 @@ bool Group::_addMember(ObjectGuid guid, char const* name, bool isAssistant, uint
                 player->m_instanceValid = true;
     }
 
-    if (!isBGGroup() && !(player && player->IsSavingDisabled()))
+    // persistent bots are saved like players but never stored as group members: they only join the group at spawn
+    bool const persistentBot = player && player->GetSession()->GetBot() && player->GetSession()->GetBot()->persistent;
+    if (!isBGGroup() && !persistentBot && !(player && player->IsSavingDisabled()))
     {
         // insert into group table
         CharacterDatabase.BeginTransaction(m_Id);

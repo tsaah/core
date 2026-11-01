@@ -195,6 +195,15 @@ set (game_SRCS
     PlayerBots/BattleBotWaypoints.cpp
     PlayerBots/PlayerBotAI.cpp
     PlayerBots/PlayerBotMgr.cpp
+    PlayerBots/PersistentBotAI.cpp
+    PlayerBots/PersistentBotCommands.cpp
+    PlayerBots/PersistentBotChat.cpp
+    PlayerBots/PersistentBotTalents.cpp
+    PlayerBots/PersistentBotGear.cpp
+    PlayerBots/PersistentBotQuests.cpp
+    PlayerBots/PersistentBotEconomy.cpp
+    PlayerBots/PersistentBotFarm.cpp
+    PlayerBots/PersistentBotGather.cpp
     Server/Protocol/Opcodes.cpp
     Server/Packets/Battleground.cpp
     Server/Packets/AuctionHouse.cpp
@@ -448,6 +457,13 @@ set (game_SRCS
     PlayerBots/BattleBotWaypoints.h
     PlayerBots/PlayerBotAI.h
     PlayerBots/PlayerBotMgr.h
+    PlayerBots/PersistentBotAI.h
+    PlayerBots/PersistentBotTalents.h
+    PlayerBots/PersistentBotGear.h
+    PlayerBots/PersistentBotQuests.h
+    PlayerBots/PersistentBotEconomy.h
+    PlayerBots/PersistentBotFarm.h
+    PlayerBots/PersistentBotGather.h
     Server/Protocol/Opcodes.h
     Server/Protocol/Opcodes_active.h
     Server/Packet.h

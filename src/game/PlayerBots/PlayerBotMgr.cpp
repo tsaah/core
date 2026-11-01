@@ -1,4 +1,5 @@
 #include "Common.h"
+#include <random>
 #include "Policies/SingletonImp.h"
 #include "PlayerBotMgr.h"
 #include "ObjectMgr.h"
@@ -18,6 +19,7 @@
 #include "Language.h"
 #include "Utilities/Random.h"
 #include "Spell.h"
+#include "PersistentBotAI.h"
 
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
@@ -65,6 +67,9 @@ void PlayerBotMgr::LoadConfig()
 
 void PlayerBotMgr::Load()
 {
+    if (!PersistentBotAI::IsDatabaseReady())
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PlayerBotMgr] Persistent bots disabled: characters database has no `persistent_bot` table (apply sql/persistentbot.sql).");
+
     // 1- Clean
     DeleteAll();
     m_bots.clear();
@@ -246,10 +251,13 @@ void PlayerBotMgr::Update(uint32 diff)
                     iter->second->ai->me->RemoveFromGroup();
                 }
 
+                bool const saveOnLogout = m_confAllowSaving || iter->second->persistent;
+
                 DeleteBot(iter);
 
-                if (WorldSession* sess = sWorld.FindSession(iter->second->accountId))
-                    sess->LogoutPlayer(m_confAllowSaving);
+                WorldSession* sess = sWorld.FindSession(iter->second->accountId);
+                if (sess && sess->GetBot() == iter->second.get())
+                    sess->LogoutPlayer(saveOnLogout);
 
                 iter->second->requestRemoval = false;
 
@@ -405,9 +413,138 @@ bool PlayerBotMgr::AddBot(PlayerBotAI* ai)
     return AddBot(e->playerGUID, false);
 }
 
-bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
+uint32 PlayerBotMgr::AcquirePersistentBotAccount()
+{
+    for (uint32 n = 1; n <= 1000; ++n)
+    {
+        std::string const name = "PBOT" + std::to_string(n);
+        uint32 id = sAccountMgr.GetId(name);
+        if (!id)
+        {
+            static char const hex[] = "0123456789ABCDEF";
+            std::random_device rd;
+            std::string password;
+            for (uint32 i = 0; i < 24; ++i)
+                password += hex[rd() % 16];
+
+            if (sAccountMgr.CreateAccount(name, password) != AOR_OK)
+                return 0;
+            id = sAccountMgr.GetId(name);
+            if (!id)
+                return 0;
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PlayerBotMgr] Created persistent bot account %s (id %u).", name.c_str(), id);
+        }
+
+        if (sWorld.FindSession(id))
+            continue;
+
+        // an offline entry keeps the account it had: that account is free again (its session is checked above)
+        bool used = false;
+        for (auto const& itr : m_bots)
+        {
+            if (itr.second->accountId == id && itr.second->state != PB_STATE_OFFLINE)
+            {
+                used = true;
+                break;
+            }
+        }
+        if (!used)
+            return id;
+    }
+    return 0;
+}
+
+// Spawns the persistent bot of character `guid` (owned by pOwner's account) next to pOwner. nullptr on success, else the reason.
+char const* PlayerBotMgr::SpawnPersistentBot(Player* pOwner, ObjectGuid guid)
+{
+    uint32 const accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    if (!accountId)
+        return "Character not found.";
+
+    if (sObjectAccessor.FindPlayerNotInWorld(guid))
+        return "Player is already online!";
+
+    if (accountId != pOwner->GetSession()->GetAccountId())
+        return "You can only add characters of your own account as persistent bots.";
+
+    uint32 const botAccountId = AcquirePersistentBotAccount();
+    if (!botAccountId)
+        return "Unable to get a free persistent bot account (PBOT).";
+
+    float x, y, z;
+    pOwner->GetNearPoint(pOwner, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
+
+    PersistentBotAI* pAI = new PersistentBotAI(pOwner, pOwner->GetMapId(), pOwner->GetMap()->GetInstanceId(), x, y, z, pOwner->GetOrientation());
+
+    if (!AddBot(guid.GetCounter(), false, pAI, botAccountId))
+    {
+        delete pAI;
+        return "Error spawning bot (it may already be being added or online).";
+    }
+
+    PersistentBotAI::MarkActive(guid.GetCounter(), pOwner->GetGUIDLow());
+    return nullptr;
+}
+
+namespace
+{
+    // the owner logs in: a persistent bot of the owner's character is either online (farm mode: rejoin the owner's group) or spawned
+    void RestorePersistentBot(Player* pOwner, uint32 charGuid)
+    {
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        if (Player* pBot = sObjectAccessor.FindPlayer(guid))
+        {
+            PersistentBotAI* pAI = dynamic_cast<PersistentBotAI*>(pBot->AI());
+            if (pAI && pAI->m_leaderGuid == pOwner->GetObjectGuid() && pBot->GetGroup() != pOwner->GetGroup())
+                pAI->AddToPlayerGroup();
+            return;
+        }
+
+        if (char const* error = sPlayerBotMgr.SpawnPersistentBot(pOwner, guid))
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PersistentBot] Unable to restore character %u of account %u: %s", charGuid, pOwner->GetSession()->GetAccountId(), error);
+    }
+}
+
+// One restore per active persistent bot of the owner's characters, spaced out: each bot needs its own session to log in.
+void PlayerBotMgr::RestoreOwnedPersistentBots(Player* pOwner)
+{
+    if (!PersistentBotAI::IsDatabaseReady())
+        return;
+
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT `guid` FROM `persistent_bot` WHERE `owner_guid`=%u AND `active`=1 ORDER BY `guid`", pOwner->GetGUIDLow()));
+    if (!result)
+        return;
+
+    static constexpr uint32 RESTORE_FIRST_DELAY = 3000;
+    static constexpr uint32 RESTORE_INTERVAL = 5000;
+    uint32 delay = RESTORE_FIRST_DELAY;
+    do
+    {
+        uint32 const charGuid = result->Fetch()[0].GetUInt32();
+        // the event dies with the owner's Player: nothing is restored if the owner logs out first
+        pOwner->m_Events.AddLambdaEventAtOffset([ownerGuid = pOwner->GetObjectGuid(), charGuid]()
+        {
+            if (Player* pPlayer = sObjectAccessor.FindPlayer(ownerGuid))
+                RestorePersistentBot(pPlayer, charGuid);
+        }, delay);
+        delay += RESTORE_INTERVAL;
+    } while (result->NextRow());
+}
+
+bool PlayerBotMgr::RequestOwnedBotRemoval(uint32 playerGuid, uint32 ownerAccountId)
+{
+    auto iter = m_bots.find(playerGuid);
+    if (iter == m_bots.end() || !iter->second->persistent || iter->second->ownerAccountId != ownerAccountId)
+        return false;
+
+    iter->second->requestRemoval = true;
+    return true;
+}
+
+bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI, uint32 sessionAccountId)
 {
     uint32 accountId = 0;
+    uint32 ownerAccountId = 0;
     auto iter = m_bots.find(playerGUID);
     if (iter == m_bots.end())
         accountId = sObjectMgr.GetPlayerAccountIdByGUID(playerGUID);
@@ -417,6 +554,33 @@ bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
     if (!accountId)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Player account %u not found...", playerGUID);
+        return false;
+    }
+
+    if (sessionAccountId)
+    {
+        ownerAccountId = sObjectMgr.GetPlayerAccountIdByGUID(playerGUID);
+        if (!ownerAccountId)
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "Player account %u not found...", playerGUID);
+            return false;
+        }
+        accountId = sessionAccountId;
+
+        // the session account must not be used by another online bot entry (its session may not be registered yet)
+        for (auto const& itr : m_bots)
+        {
+            if (itr.first != playerGUID && itr.second->state != PB_STATE_OFFLINE && itr.second->accountId == accountId)
+            {
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] Account %u is already used by another bot!", accountId);
+                return false;
+            }
+        }
+    }
+
+    if (iter != m_bots.end() && iter->second->state != PB_STATE_OFFLINE)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] Bot %u is already being added or online!", playerGUID);
         return false;
     }
 
@@ -430,6 +594,7 @@ bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
     if (iter != m_bots.end())
     {
         e = iter->second;
+        e->accountId = accountId;
 
         if (pAI) // new AI
         {
@@ -460,6 +625,8 @@ bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
     }
 
     e->ai->botEntry = e.get();
+    e->persistent = e->ai->IsPersistent();
+    e->ownerAccountId = e->persistent ? ownerAccountId : 0;
     e->state = PB_STATE_LOADING;
     WorldSession* session = new WorldSession(accountId, nullptr, sAccountMgr.GetSecurity(accountId), 0, LOCALE_enUS);
     session->SetBot(e);

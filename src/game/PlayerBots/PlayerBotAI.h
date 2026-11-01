@@ -21,6 +21,9 @@
 #include "WorldSession.h"
 
 struct PlayerBotEntry;
+class Player;
+class Quest;
+class WorldObject;
 class WorldSession;
 class PlayerBotAI;
 
@@ -38,7 +41,11 @@ class PlayerBotAI: public PlayerAI
 
         virtual bool OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess);
         virtual void OnBotEntryLoad(PlayerBotEntry* entry) {}
+        virtual bool IsPersistent() const { return false; }
+        virtual void OnGroupLeaderQuestAccepted(Quest const* /*pQuest*/, WorldObject* /*pGiver*/) {}
         virtual void OnPacketReceived(WorldPacket const* /*packet*/) {} // server has sent a packet to this session
+        virtual void OnChatFromPlayer(Player* /*pSender*/, uint32 /*chatType*/, std::string const& /*msg*/) {} // party or whisper chat sent to this bot
+        virtual void OnKickedFromGroup() {} // the group leader uninvited this bot (not when it leaves or the group disbands)
         void UpdateAI(uint32 const /*diff*/) override; // Handle delayed teleports
         virtual void OnPlayerLogin() {}
         virtual void BeforeAddToMap(Player* player) {} // me=nullptr at call

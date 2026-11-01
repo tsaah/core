@@ -29,9 +29,27 @@
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "Group.h"
+#include "ObjectAccessor.h"
+#include "PlayerBotMgr.h"
+#include "PlayerBotAI.h"
 #include "Utilities/Random.h"
 #include "SocialMgr.h"
 #include "Util.h"
+
+namespace
+{
+    // the leader uninvites a bot: its AI is told before the bot leaves the group
+    void NotifyBotKickedFromGroup(ObjectGuid guid)
+    {
+        Player* pTarget = ObjectAccessor::FindPlayer(guid);
+        if (!pTarget)
+            return;
+
+        PlayerBotEntry* pBot = pTarget->GetSession()->GetBot();
+        if (pBot && pBot->ai)
+            pBot->ai->OnKickedFromGroup();
+    }
+}
 
 /* differeces from off:
     -you can uninvite yourself - is is useful
@@ -238,6 +256,7 @@ void WorldSession::HandleGroupUninviteGuidOpcode(WorldPackets::Group::GroupUninv
 
     if (grp->IsMember(packet.guid))
     {
+        NotifyBotKickedFromGroup(packet.guid);
         Player::RemoveFromGroup(grp, packet.guid);
         return;
     }
@@ -276,6 +295,7 @@ void WorldSession::HandleGroupUninviteOpcode(WorldPackets::Group::GroupUninvite 
             SendPartyResult(PARTY_OP_LEAVE, "", res);
             return;
         }
+        NotifyBotKickedFromGroup(guid);
         Player::RemoveFromGroup(grp, guid);
         return;
     }

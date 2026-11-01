@@ -82,6 +82,7 @@ public:
     }
 
     virtual void OnPacketReceived(WorldPacket const* packet) override;
+    bool IsPersistent() const final { return m_persistent; }
     void SendBattlefieldPortPacket();
     void SendBattlemasterJoinPacket(uint8 battlegroundId);
     void SendAreaTriggerPacket(uint32 areaTriggerId);
@@ -555,6 +556,7 @@ public:
     } m_spells;
 
     bool m_initialized = false;
+    bool m_persistent = false;
     bool m_isBuffing = false;
     bool m_preventCasting = false;
     bool m_receivedBgInvite = false;

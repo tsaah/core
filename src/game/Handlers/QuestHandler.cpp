@@ -32,6 +32,8 @@
 #include "ObjectAccessor.h"
 #include "ScriptMgr.h"
 #include "Group.h"
+#include "PlayerBotMgr.h"
+#include "PlayerBotAI.h"
 
 void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPackets::Quest::QuestgiverStatusQuery const& packet)
 {
@@ -168,7 +170,28 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPackets::Quest::Questg
 
         if (_player->CanAddQuest(qInfo, true))
         {
+            ObjectGuid const botGiverGuid = (pObject->GetTypeId() == TYPEID_UNIT || pObject->GetTypeId() == TYPEID_GAMEOBJECT) ? pObject->GetObjectGuid() : ObjectGuid();
+
             _player->AddQuest(qInfo, pObject);              // pObject (if it item) can be destroyed at call
+
+            WorldObject* pBotGiver = nullptr;
+            if (botGiverGuid.IsCreature())
+                pBotGiver = _player->GetMap()->GetCreature(botGiverGuid);
+            else if (botGiverGuid.IsGameObject())
+                pBotGiver = _player->GetMap()->GetGameObject(botGiverGuid);
+
+            if (pBotGiver)
+            {
+                if (Group* pGroup = _player->GetGroup())
+                {
+                    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+                    {
+                        Player* pMember = itr->getSource();
+                        if (pMember && pMember != _player && pMember->GetSession()->GetBot() && pMember->GetSession()->GetBot()->ai)
+                            pMember->GetSession()->GetBot()->ai->OnGroupLeaderQuestAccepted(qInfo, pBotGiver);
+                    }
+                }
+            }
 
             if (qInfo->HasQuestFlag(QUEST_FLAGS_PARTY_ACCEPT))
             {

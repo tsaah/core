@@ -42,6 +42,7 @@
 #include "Spell.h"
 #include "AccountMgr.h"
 #include "MapPersistentStateMgr.h"
+#include "PlayerBotMgr.h"
 #include "SpellAuras.h"
 #include "Util.h"
 #include "WaypointManager.h"
@@ -817,10 +818,17 @@ uint8 ObjectMgr::GetPlayerClassByGUID(ObjectGuid guid) const
     return 0;
 }
 
+// persistent bots run on a hidden PBOT session, but their character still belongs to the owner's account
+static uint32 GetCharacterAccountId(WorldSession const* pSession)
+{
+    PlayerBotEntry const* pBot = pSession->GetBot();
+    return pBot && pBot->persistent && pBot->ownerAccountId ? pBot->ownerAccountId : pSession->GetAccountId();
+}
+
 uint32 ObjectMgr::GetPlayerAccountIdByGUID(ObjectGuid guid) const
 {
     if (auto player = GetPlayer(guid))
-        return player->GetSession()->GetAccountId();
+        return GetCharacterAccountId(player->GetSession());
 
     if (auto pData = GetPlayerDataByGUID(guid.GetCounter()))
         return pData->uiAccount;
@@ -840,7 +848,7 @@ PlayerCacheData* ObjectMgr::InsertPlayerInCache(Player* pPlayer)
     auto pSession = pPlayer->GetSession();
     if (!pSession)
         return nullptr;
-    auto accountId = pSession->GetAccountId();
+    auto accountId = GetCharacterAccountId(pSession);
 
     return InsertPlayerInCache(pPlayer->GetGUIDLow(), pPlayer->GetRace(), pPlayer->GetClass(), pPlayer->GetGender(), accountId, pPlayer->GetName(), pPlayer->GetLevel(), pPlayer->GetCachedZoneId());
 }
@@ -892,7 +900,7 @@ void ObjectMgr::UpdatePlayerCache(Player* pPlayer)
     if (!data)
         return;
     if (pPlayer->GetSession())
-        UpdatePlayerCache(data, pPlayer->GetRace(), pPlayer->GetClass(), pPlayer->GetGender(), pPlayer->GetSession()->GetAccountId(), pPlayer->GetName(), pPlayer->GetLevel(), pPlayer->GetCachedZoneId());
+        UpdatePlayerCache(data, pPlayer->GetRace(), pPlayer->GetClass(), pPlayer->GetGender(), GetCharacterAccountId(pPlayer->GetSession()), pPlayer->GetName(), pPlayer->GetLevel(), pPlayer->GetCachedZoneId());
 
     UpdatePlayerCachedPosition(data, pPlayer->GetMapId(), pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ(), pPlayer->GetOrientation(), pPlayer->IsTaxiFlying());
 }

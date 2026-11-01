@@ -32,13 +32,15 @@ struct PlayerBotEntry
 {
     uint64 playerGUID;
     std::string name;
-    uint32 accountId;
+    uint32 accountId; // account of the bot's WorldSession
+    uint32 ownerAccountId = 0; // persistent bots: real account of the character row (session runs on a hidden PBOT account)
 
     uint32 chance;
     uint8 state; //Online, in queue or offline
     bool isChatBot; // bot des joueurs en discussion via le site.
     bool customBot; // Enabled even if PlayerBot system disabled (AutoTesting system for example)
     bool requestRemoval;
+    bool persistent = false;
     std::unique_ptr<PlayerBotAI> ai;
 
     PlayerBotEntry(uint64 guid, uint32 account, uint32 chance_): playerGUID(guid), accountId(account), chance(chance_), state(PB_STATE_OFFLINE), isChatBot(false), customBot(false), requestRemoval(false), ai(nullptr)
@@ -80,7 +82,16 @@ class PlayerBotMgr
         bool AddOrRemoveBot();
 
         bool AddBot(PlayerBotAI* ai);
-        bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr);
+        // sessionAccountId: run the bot on this account's session instead of the character's own account (see AcquirePersistentBotAccount)
+        bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr, uint32 sessionAccountId = 0);
+        // Returns the id of a free hidden PBOT<n> account (created if needed), 0 on failure.
+        uint32 AcquirePersistentBotAccount();
+        // Spawns the persistent bot of character guid (of pOwner's account) next to pOwner. Returns nullptr on success, else the reason.
+        char const* SpawnPersistentBot(Player* pOwner, ObjectGuid guid);
+        // Owner logged in: restores its active persistent bots (joins them back to the group or spawns them).
+        void RestoreOwnedPersistentBots(Player* pOwner);
+        // Asks the persistent bot of this character to be removed (saved) if it belongs to ownerAccountId.
+        bool RequestOwnedBotRemoval(uint32 playerGuid, uint32 ownerAccountId);
         bool DeleteBot(std::map<uint64, std::shared_ptr<PlayerBotEntry>>::iterator iter);
         bool DeleteBot(uint32 playerGuid);
 

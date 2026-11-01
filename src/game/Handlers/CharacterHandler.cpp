@@ -378,6 +378,16 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin 
         return;
     }
 
+    // the character is one of this account's persistent bots: ask for its removal (it saves), the player retries
+    if (sPlayerBotMgr.RequestOwnedBotRemoval(packet.guid.GetCounter(), GetAccountId()))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PersistentBot] Account %u tried to log in %s while it is a persistent bot; removal requested.", GetAccountId(), packet.guid.GetString().c_str());
+        auto loginFailedPacket = std::make_unique<WorldPackets::Character::CharacterLoginFailed>();
+        loginFailedPacket->result = 1;
+        SendPacket(std::move(loginFailedPacket));
+        return;
+    }
+
     LoginQueryHolder* holder = new LoginQueryHolder(GetAccountId(), packet.guid);
     if (!holder->Initialize())
     {
@@ -424,6 +434,18 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
     bool alreadyOnline = false;
     if (pCurrChar)
     {
+        // Owner logging in a character that became a persistent bot meanwhile: remove the bot, refuse this attempt
+        if (pCurrChar->GetSession()->GetAccountId() != GetAccountId() &&
+            sPlayerBotMgr.RequestOwnedBotRemoval(playerGuid.GetCounter(), GetAccountId()))
+        {
+            auto loginFailedPacket = std::make_unique<WorldPackets::Character::CharacterLoginFailed>();
+            loginFailedPacket->result = 1;
+            SendPacket(std::move(loginFailedPacket));
+            delete holder;
+            m_playerLoading = false;
+            return;
+        }
+
         // Hacking attempt
         if (pCurrChar->GetSession()->GetAccountId() != GetAccountId())
         {
@@ -475,7 +497,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
         pCurrChar = new Player(this);
         pCurrChar->GetMotionMaster()->Initialize();
 
-        if (GetBot() && !sPlayerBotMgr.IsSavingAllowed())
+        if (GetBot() && !sPlayerBotMgr.IsSavingAllowed() && !GetBot()->persistent)
             pCurrChar->m_saveDisabled = true;
     }
 
@@ -683,6 +705,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
 
     if (!alreadyOnline && !pCurrChar->IsStandingUp() && !pCurrChar->HasUnitState(UNIT_STATE_STUNNED))
         pCurrChar->SetStandState(UNIT_STAND_STATE_STAND);
+
+    // the persistent bots the owner had come back (scheduled: the owner must be in world first)
+    if (!alreadyOnline)
+        sPlayerBotMgr.RestoreOwnedPersistentBots(pCurrChar);
 
     m_playerLoading = false;
     delete holder;

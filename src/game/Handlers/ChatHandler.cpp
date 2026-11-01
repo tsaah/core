@@ -33,6 +33,7 @@
 #include "Guild.h"
 #include "GuildMgr.h"
 #include "Player.h"
+#include "PlayerBotAI.h"
 #include "SpellAuras.h"
 #include "Language.h"
 #include "Util.h"
@@ -455,7 +456,14 @@ void WorldSession::HandleChatMessageOpcode(WorldPackets::Chat::ChatMessage const
                 }
 
                 if (masterPlr->IsGameMaster() || allowSendWhisper)
+                {
                     masterPlr->Whisper(packet.message.c_str(), packet.lang, player);
+
+                    // a persistent bot takes commands from its owner by whisper
+                    if (packet.lang != LANG_ADDON)
+                        if (PlayerBotAI* pBotAI = dynamic_cast<PlayerBotAI*>(toPlayer->AI()))
+                            pBotAI->OnChatFromPlayer(GetPlayer(), packet.type, packet.message);
+                }
 
                 if (packet.lang != LANG_ADDON)
                 {
@@ -488,7 +496,19 @@ void WorldSession::HandleChatMessageOpcode(WorldPackets::Chat::ChatMessage const
             ChatHandler::BuildChatPacket(data, ChatMsg(packet.type), packet.message.c_str(), Language(packet.lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(&data, false, group->GetMemberGroup(GetPlayer()->GetObjectGuid()));
             if (packet.lang != LANG_ADDON)
+            {
                 sWorld.LogChat(this, "Group", packet.message.c_str(), nullptr, group->GetId());
+
+                // persistent bots in the group take commands from their owner
+                for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+                {
+                    if (Player* pMember = itr->getSource())
+                    {
+                        if (PlayerBotAI* pBotAI = dynamic_cast<PlayerBotAI*>(pMember->AI()))
+                            pBotAI->OnChatFromPlayer(GetPlayer(), packet.type, packet.message);
+                    }
+                }
+            }
         }
         break;
         case CHAT_MSG_GUILD: // Master side

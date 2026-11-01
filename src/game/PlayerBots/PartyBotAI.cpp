@@ -151,6 +151,8 @@ Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
 
     Unit* pNonTank = nullptr;
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -241,6 +243,8 @@ bool PartyBotAI::ShouldAutoRevive() const
 
     bool alivePlayerNearby = false;
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return false;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -318,7 +322,7 @@ bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget
         return true;
 
     if (pSpellEntry->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS) &&
-        AreOthersOnSameTarget(pTarget->GetObjectGuid()))
+        me->GetGroup() && AreOthersOnSameTarget(pTarget->GetObjectGuid()))
         return false;
 
     if (pSpellEntry->HasSingleTargetAura())
@@ -349,7 +353,11 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
 
 Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const
 {
-    ObjectGuid targetGuid = me->GetGroup()->GetTargetWithIcon(mark);
+    Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
+
+    ObjectGuid targetGuid = pGroup->GetTargetWithIcon(mark);
     if (targetGuid.IsUnit())
         return me->GetMap()->GetUnit(targetGuid);
 
@@ -366,7 +374,7 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
     else
     {
         // Stick to marked target in combat.
-        if (me->IsInCombat() || pLeader->GetVictim())
+        if (me->GetGroup() && (me->IsInCombat() || (pLeader && pLeader->GetVictim())))
         {
             for (auto markId : m_marksToFocus)
             {
@@ -379,10 +387,13 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
         }
 
         // Who is the leader attacking.
-        if (Unit* pVictim = pLeader->GetVictim())
+        if (pLeader)
         {
-            if (IsValidHostileTarget(pVictim))
-                return pVictim;
+            if (Unit* pVictim = pLeader->GetVictim())
+            {
+                if (IsValidHostileTarget(pVictim))
+                    return pVictim;
+            }
         }
     }
 
@@ -393,7 +404,7 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
             return pAttacker;
     }
 
-    if (!IsInDuel())
+    if (!IsInDuel() && me->GetGroup())
     {
         // Check if other group members are under attack.
         if (Unit* pPartyAttacker = SelectPartyAttackTarget())
@@ -414,6 +425,8 @@ Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
 Unit* PartyBotAI::SelectPartyAttackTarget() const
 {
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -440,6 +453,8 @@ Player* PartyBotAI::SelectResurrectionTarget() const
         return nullptr;
 
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -468,6 +483,8 @@ Player* PartyBotAI::SelectShieldTarget() const
         return nullptr;
 
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -654,7 +671,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             if (m_role == ROLE_INVALID)
                 AutoAssignRole();
 
-            if (me->IsGameMaster())
+            if (!m_persistent && me->IsGameMaster())
                 me->SetGameMaster(false);
 
             me->TeleportTo(m_mapId, m_x, m_y, m_z, m_o);
@@ -665,8 +682,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         AddAllSpellReagents();
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         SummonPetIfNeeded();
-        me->SetHealthPercent(100.0f);
-        me->SetPowerPercent(me->GetPowerType(), 100.0f);
+        if (!m_persistent)
+        {
+            me->SetHealthPercent(100.0f);
+            me->SetPowerPercent(me->GetPowerType(), 100.0f);
+        }
 
         uint32 newzone, newarea;
         me->GetZoneAndAreaId(newzone, newarea);
@@ -683,17 +703,18 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         m_resetSpellData = false;
     }
 
-    Player* pLeader = GetPartyLeader();
-    if (!pLeader)
+    bool const leaderless = IsLeaderless();
+    Player* pLeader = leaderless ? nullptr : GetPartyLeader();
+    if (!pLeader && !leaderless)
     {
         botEntry->requestRemoval = true;
         return;
     }
 
-    if (!pLeader->IsInWorld())
+    if (pLeader && !pLeader->IsInWorld())
         return;
 
-    if (pLeader->InBattleGround() &&
+    if (pLeader && pLeader->InBattleGround() &&
         !me->InBattleGround())
     {
         if (m_receivedBgInvite)
@@ -707,7 +728,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         return;
     }
 
-    if (pLeader->IsTaxiFlying())
+    if (pLeader && pLeader->IsTaxiFlying())
     {
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
@@ -793,7 +814,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         if (DrinkAndEat())
         {
-            if (!me->IsWithinDistInMap(pLeader, 100.0f))
+            if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f))
             {
                 me->SetHealth(me->GetMaxHealth());
                 if (me->GetPowerType() == POWER_MANA)
@@ -805,7 +826,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
 
         // Teleport to leader if too far away.
-        if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
+        if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -844,9 +865,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             if (pVictim)
                 me->AttackStop();
 
-            if (Unit* pVictim = SelectAttackTarget(pLeader))
+            Unit* pNewVictim = SelectAttackTarget(pLeader);
+            if (!pNewVictim && !IsInDuel())
+                pNewVictim = SelectGrindTarget();
+            if (pNewVictim)
             {
-                AttackStart(pVictim);
+                AttackStart(pNewVictim);
                 return;
             }
         }
@@ -855,7 +879,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!me->IsInCombat())
     {
         // Mount if leader is mounted and we don't have a target.
-        if (pLeader->IsMounted() && !me->GetVictim())
+        if (pLeader && pLeader->IsMounted() && !me->GetVictim())
         {
             if (!me->IsMounted())
             {
@@ -886,7 +910,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         if (!pVictim)
         {
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+            if (pLeader && me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
                 me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
         }
         else

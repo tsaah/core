@@ -115,6 +115,24 @@ ChatCommand * ChatHandler::getCommandTable()
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 
+    static ChatCommand persistentBotCommandTable[] =
+    {
+        { "add", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotAddCommand, "", nullptr },
+        { "remove", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotRemoveCommand, "", nullptr },
+        { "list", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotListCommand, "", nullptr },
+        { "status", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotStatusCommand, "", nullptr },
+        { "learn", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotLearnCommand, "", nullptr },
+        { "unlearn", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotUnlearnCommand, "", nullptr },
+        { "tame", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotTameCommand, "", nullptr },
+        { "abandonpet", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotAbandonPetCommand, "", nullptr },
+        { "spec", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotSpecCommand, "", nullptr },
+        { "resetspec", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotResetSpecCommand, "", nullptr },
+        { "farm", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotFarmCommand, "", nullptr },
+        { "follow", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotFollowCommand, "", nullptr },
+        { "fish", SEC_PLAYER, false, &ChatHandler::HandlePersistentBotFishCommand, "", nullptr },
+        { nullptr,      0,                      false, nullptr,                                        "", nullptr },
+    };
+
     static ChatCommand battleBotAddCommandTable[] =
     {
         { "alterac",    SEC_ADMINISTRATOR,      true, &ChatHandler::HandleBattleBotAddAlteracCommand, "", nullptr },
@@ -1219,6 +1237,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "bot",            SEC_ADMINISTRATOR,  true, nullptr,                              "Manage bots", botCommandTable      },
         { "ahbot",          SEC_ADMINISTRATOR,  true, nullptr,                            "Manage AH bot", ahbotCommandTable    },
         { "partybot",       SEC_ADMINISTRATOR,  false, nullptr,                       "Manage party bots", partyBotCommandTable },
+        { "persistentbot",  SEC_PLAYER,         false, nullptr,                 "Manage persistent bots", persistentBotCommandTable },
         { "battlebot",      SEC_ADMINISTRATOR,  true, nullptr,                      "Manage battle bots", battleBotCommandTable},
         { "world",          SEC_ADMINISTRATOR,  false, nullptr,                                        "", worldCommandTable    },
         { "possess",        SEC_GAMEMASTER,     false, &ChatHandler::HandlePossessCommand,             "", nullptr              },

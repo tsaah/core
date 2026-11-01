@@ -98,6 +98,7 @@ enum class ParseCommandResult
 };
 
 class PartyBotAI;
+class PersistentBotAI;
 class BattleBotAI;
 
 class ChatHandler
@@ -297,6 +298,20 @@ class ChatHandler
         bool HandlePartyBotUnpauseCommand(char * args);
         bool HandlePartyBotUnequipCommand(char * args);
         bool HandlePartyBotRemoveCommand(char * args);
+        PersistentBotAI* ResolvePersistentBot(std::string const& nameArg);
+        bool HandlePersistentBotAddCommand(char* args);
+        bool HandlePersistentBotRemoveCommand(char* args);
+        bool HandlePersistentBotListCommand(char* args);
+        bool HandlePersistentBotStatusCommand(char* args);
+        bool HandlePersistentBotLearnCommand(char* args);
+        bool HandlePersistentBotUnlearnCommand(char* args);
+        bool HandlePersistentBotTameCommand(char* args);
+        bool HandlePersistentBotAbandonPetCommand(char* args);
+        bool HandlePersistentBotSpecCommand(char* args);
+        bool HandlePersistentBotResetSpecCommand(char* args);
+        bool HandlePersistentBotFarmCommand(char* args);
+        bool HandlePersistentBotFollowCommand(char* args);
+        bool HandlePersistentBotFishCommand(char* args);
         bool HandleBattleBotAddCommand(char* args, uint8 bg);
         bool HandleBattleBotAddAlteracCommand(char* args);
         bool HandleBattleBotAddArathiCommand(char* args);
